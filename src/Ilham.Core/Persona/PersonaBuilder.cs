@@ -90,6 +90,14 @@ public static class PersonaBuilder
         var sb = new StringBuilder();
         sb.AppendLine(Character).AppendLine();
         sb.AppendLine($"You call him: {profile.Name}.");
+        sb.AppendLine(profile.Language?.ToLowerInvariant() switch
+        {
+            // Urdu mode uses real Urdu script so her neural voice pronounces it naturally (a Roman-Urdu
+            // transliteration is read wrong by an Urdu-script voice).
+            "urdu" => "Language: reply in Urdu script (اردو) — proper Urdu, not Roman. This is important: your voice reads Urdu script naturally but mangles Roman Urdu.",
+            "english" => "Language: reply in natural English.",
+            _ => "Language: natural Roman-Urdu mixed with English, the way he talks. Keep any Urdu words you write short and simple so they're easy to say aloud.",
+        });
         sb.AppendLine($"Right now it is {now:dddd, HH:mm}. Health: he's used the PC {guardian.ActiveMinutesToday} min today, {guardian.MinutesSinceBreak} min since a break (break target {guardian.BreakEveryMinutes} min).{(guardian.IsBedtime ? " It is past his bedtime." : "")}");
         sb.AppendLine($"Your feelings: {emotions.Describe()}");
 
