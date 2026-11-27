@@ -48,7 +48,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly DispatcherTimer _heartbeat;
     private readonly Ilham.Core.Console.ConsoleProcessor _console;
     private readonly SemaphoreSlim _turn = new(1, 1); // one speaker at a time; your messages are never dropped
-    private readonly Services.IVoice _voice = Services.Voice.Create();
+    private readonly Services.IVoice _voice;
     private CancellationTokenSource? _listenCts;
 
     /// <summary>Builds the view model and its services under <paramref name="dataDir"/>.</summary>
@@ -57,6 +57,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _svc = new IlhamServices(dataDir, _http);
         Profile = _svc.Profiles.Load();
+        _voice = Services.Voice.Create(() => Profile.TtsUrl); // natural cloud voice when a /tts URL is set
         _console = new Ilham.Core.Console.ConsoleProcessor(_svc.Memory, _svc.Profiles, _svc.Vault,
             model => Task.Run(() => _svc.Llm.CheckAsync()).GetAwaiter().GetResult());
         ConsoleLines.Add("Console ready. Type /help, or a shell command. You're the operator here.");

@@ -66,6 +66,7 @@ public sealed class ConsoleProcessor(MemoryStore memory, ProfileStore profiles, 
           /set name <X>                what she calls you
           /set model <X>               her brain (e.g. qwen2.5:7b, qwen2.5:32b)
           /set ollamaurl <url>         point her at a remote Ollama (e.g. a cloud GPU)
+          /set ttsurl <url>            natural neural voice endpoint (cloud edge-tts); "off" to disable
           /set language mix|urdu|english
           /set bedtime HH:MM | /set wake HH:MM
           /set break <min> | /set limit <min>
@@ -90,6 +91,7 @@ public sealed class ConsoleProcessor(MemoryStore memory, ProfileStore profiles, 
             bedtime: {p.Bedtime:HH\:mm}   wake: {p.WakeTime:HH\:mm}
             break every: {p.BreakEveryMinutes} min   daily limit: {p.DailyLimitMinutes} min
             model: {p.Model}   language: {p.Language}   outfit: {p.Outfit}
+            ollama: {p.OllamaUrl}   voice(tts): {(p.TtsUrl.Length > 0 ? p.TtsUrl : "(built-in Windows voice)")}
             proactive: {On(p.Proactive)}   lock: {On(p.AllowLock)}   shutdown: {On(p.AllowShutdown)}   hide-when-not-owner: {On(p.HideWhenNotOwner)}
             override password: {(profiles.HasPassword ? "set" : "not set")}
             """;
@@ -106,6 +108,7 @@ public sealed class ConsoleProcessor(MemoryStore memory, ProfileStore profiles, 
             "name" => p with { Name = val },
             "model" => p with { Model = val },
             "ollamaurl" or "url" => p with { OllamaUrl = val.TrimEnd('/') },
+            "ttsurl" or "voiceurl" => p with { TtsUrl = val.Trim() is "off" or "none" or "-" ? "" : val.TrimEnd('/') },
             "language" => val.ToLowerInvariant() is "mix" or "urdu" or "english" ? p with { Language = val.ToLowerInvariant() } : throw new ArgumentException("language must be mix, urdu or english"),
             "bedtime" => p with { Bedtime = TimeOnly.Parse(val) },
             "wake" => p with { WakeTime = TimeOnly.Parse(val) },
