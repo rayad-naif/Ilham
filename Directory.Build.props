@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    Build for the .NET version of the SDK you have installed:
+      .NET 8 SDK → net8.0     .NET 10 SDK → net10.0     .NET 11 SDK → net11.0
+    Minimum is .NET 8. To force a specific one:  dotnet build -p:IlhamTfm=net8.0
+  -->
+  <PropertyGroup>
+    <!-- The SDK folder (e.g. ".../sdk/11.0.100") is the only place the SDK version is known this early: take "11.0". -->
+    <_IlhamSdkTfm>$([System.Text.RegularExpressions.Regex]::Match('$(MSBuildBinPath)', '(?&lt;=[\\/]sdk[\\/])\d+\.\d+'))</_IlhamSdkTfm>
+    <IlhamTfm Condition="'$(IlhamTfm)' == '' and '$(_IlhamSdkTfm)' != ''">net$(_IlhamSdkTfm)</IlhamTfm>
+    <!-- Fallback (e.g. Visual Studio's own MSBuild): .NET 8; RollForward below still lets it run on newer runtimes. -->
+    <IlhamTfm Condition="'$(IlhamTfm)' == ''">net8.0</IlhamTfm>
+    <TargetFramework>$(IlhamTfm)</TargetFramework>
+
+    <!-- Major version of the target, e.g. "11": picks the matching ASP.NET test-host package. -->
+    <IlhamDotNetMajor>$(IlhamTfm.Substring(3).Split('.')[0])</IlhamDotNetMajor>
+
+    <!-- If the exact runtime is missing, run on a newer installed one instead of failing. -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+</Project>
