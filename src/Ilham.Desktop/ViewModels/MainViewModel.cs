@@ -47,7 +47,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly HttpClient _http = new();
     private readonly DispatcherTimer _heartbeat;
     private readonly Ilham.Core.Console.ConsoleProcessor _console;
-    private bool _busy;
+    private readonly SemaphoreSlim _turn = new(1, 1); // one speaker at a time; your messages are never dropped
+    private readonly Services.IVoice _voice = Services.Voice.Create();
+    private CancellationTokenSource? _listenCts;
 
     /// <summary>Builds the view model and its services under <paramref name="dataDir"/>.</summary>
     /// <param name="dataDir">Folder for her private data.</param>
@@ -58,6 +60,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _console = new Ilham.Core.Console.ConsoleProcessor(_svc.Memory, _svc.Profiles, _svc.Vault,
             model => Task.Run(() => _svc.Llm.CheckAsync()).GetAwaiter().GetResult());
         ConsoleLines.Add("Console ready. Type /help, or a shell command. You're the operator here.");
+        _speakEnabled = _voice.CanSpeak; // she talks by default where speech is available
 
         // If you drop a realistic portrait at %LocalAppData%/Ilham/portrait.(png|jpg|jpeg|webp), she wears
         // that real face; otherwise the drawn avatar is used. Her picture, shown unchanged.
@@ -147,10 +150,46 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>Raised when her mood changes, so the window can drive the avatar control.</summary>
     public event Action<string>? MoodChanged;
-    /// <summary>Raised with live speech amplitude for lip-sync (wired to TTS by the view).</summary>
+    /// <summary>Raised with live speech amplitude for lip-sync (driven by TTS).</summary>
     public event Action<double>? Amplitude;
     /// <summary>Raised when she changes outfit, so the window applies it to the avatar.</summary>
     public event Action<string>? OutfitChanged;
+
+    /// <summary>Whether she speaks her replies aloud.</summary>
+    public bool CanSpeak => _voice.CanSpeak;
+    /// <summary>Whether listening (mic) is available.</summary>
+    public bool CanListen => _voice.CanListen;
+
+    private bool _speakEnabled;
+    /// <summary>When on, she reads her replies aloud.</summary>
+    public bool SpeakEnabled { get => _speakEnabled; set { _speakEnabled = value; Raise(); if (!value) _voice.StopSpeaking(); } }
+
+    private bool _micEnabled;
+    /// <summary>When on, she listens on the mic and sends what she hears.</summary>
+    public bool MicEnabled
+    {
+        get => _micEnabled;
+        set { if (_micEnabled == value) return; _micEnabled = value; Raise(); if (value) StartListening(); else StopListening(); }
+    }
+
+    private void StartListening()
+    {
+        if (!_voice.CanListen) { _micEnabled = false; Raise(nameof(MicEnabled)); return; }
+        _listenCts = new CancellationTokenSource();
+        var ct = _listenCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                string? heard = await _voice.ListenOnceAsync(ct);
+                if (ct.IsCancellationRequested) break;
+                if (!string.IsNullOrWhiteSpace(heard))
+                    await Dispatcher.UIThread.InvokeAsync(async () => { Draft = heard!; await SendAsync(); });
+            }
+        }, ct);
+    }
+
+    private void StopListening() { _listenCts?.Cancel(); _listenCts = null; }
 
     private void WearOutfit(string outfit, bool persist)
     {
@@ -160,14 +199,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OutfitChanged?.Invoke(outfit);
     }
 
-    /// <summary>Sends the current draft to Ilham.</summary>
+    /// <summary>Sends the current draft to Ilham. Your message is never dropped — it waits its turn if she's mid-sentence.</summary>
     public async Task SendAsync()
     {
         string text = Draft.Trim();
-        if (text.Length == 0 || _busy) return;
+        if (text.Length == 0) return;
         Draft = "";
         Messages.Add(new ChatLineVm(false, text));
-        await StreamAsync(brain => brain.RespondAsync(text));
+        _svc.Initiative.NoteUserActivity();
+        await _turn.WaitAsync();
+        try { await StreamCore(brain => brain.RespondAsync(text)); }
+        catch (Exception ex) { Add(true).Text = $"(Kuch gadbad ho gayi: {ex.Message})"; }
+        finally { _turn.Release(); _svc.Initiative.NoteSpoke(); }
     }
 
     private async Task GreetAsync()
@@ -189,24 +232,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            // Health.
+            // Health alerts act even while she's mid-turn; but she only *speaks* if nobody else is talking.
             var alert = _svc.Guardian.Tick(Profile, _svc.PcActions.Idle());
             if (alert is { Action: not GuardianAction.None })
             {
                 if (alert.Action == GuardianAction.Lock) _svc.PcActions.Lock();
                 else if (alert.Action == GuardianAction.Shutdown) _svc.PcActions.ScheduleShutdown(alert.CountdownSeconds, "Ilham: so jao please.");
             }
-            if (alert is not null && !_busy)
-            {
-                await StreamAsync(brain => brain.SpeakGuardianAsync(alert, Profile));
-                return;
-            }
-            // Her own initiative.
-            bool atKeyboard = _svc.PcActions.Idle() < TimeSpan.FromMinutes(3);
-            var move = _svc.Initiative.Consider(Profile, atKeyboard);
-            if (move is not null && !_busy)
-                await StreamAsync(brain => brain.SpeakUnpromptedAsync(move.Instruction, move.Fallback, move.Mood, Profile));
             _svc.PersistCounters();
+
+            if (!await _turn.WaitAsync(0)) return; // someone's talking (you, or her) — don't interrupt or block you
+            try
+            {
+                if (alert is not null)
+                    await StreamCore(brain => brain.SpeakGuardianAsync(alert, Profile));
+                else if (_svc.Initiative.Consider(Profile, _svc.PcActions.Idle() < TimeSpan.FromMinutes(3)) is { } move)
+                    await StreamCore(brain => brain.SpeakUnpromptedAsync(move.Instruction, move.Fallback, move.Mood, Profile));
+            }
+            finally { _turn.Release(); _svc.Initiative.NoteSpoke(); }
         }
         catch { /* heartbeat must never crash the UI */ }
     }
@@ -217,12 +260,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         var vm = Pending.FirstOrDefault(p => p.Id == id);
         if (vm is not null) Pending.Remove(vm);
+        await _turn.WaitAsync();
         try
         {
             var (_, reaction) = await _svc.Brain.ApproveAsync(id, TimeSpan.FromMinutes(2));
             await StreamChunks(reaction);
         }
         catch (KeyNotFoundException) { /* already handled */ }
+        catch (Exception ex) { Add(true).Text = $"(Command chalane mein dikkat: {ex.Message})"; }
+        finally { _turn.Release(); }
     }
 
     /// <summary>Rejects a pending command.</summary>
@@ -233,28 +279,28 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (vm is not null) { Pending.Remove(vm); _svc.Brain.Reject(id); }
     }
 
-    private async Task StreamAsync(Func<IlhamBrain, IAsyncEnumerable<ReplyChunk>> start)
+    /// <summary>Runs one streamed reply (caller holds the turn lock).</summary>
+    private async Task StreamCore(Func<IlhamBrain, IAsyncEnumerable<ReplyChunk>> start)
     {
-        _busy = true;
-        _svc.Initiative.NoteUserActivity();
-        try
-        {
-            var brain = await _svc.ActiveBrainAsync();
-            await StreamChunks(start(brain));
-        }
-        finally { _busy = false; _svc.Initiative.NoteSpoke(); }
+        var brain = await _svc.ActiveBrainAsync();
+        await StreamChunks(start(brain));
     }
 
     private async Task StreamChunks(IAsyncEnumerable<ReplyChunk> chunks)
     {
         ChatLineVm? bubble = null;
+        bool gotText = false;
+        string fullText = "";
+        string? mood = null;
         await foreach (var c in chunks)
         {
-            if (c.Mood is { } m) SetMood(m.ToString().ToLowerInvariant());
+            if (c.Mood is { } m) { mood = m.ToString().ToLowerInvariant(); SetMood(mood); }
             if (c.TextDelta.Length > 0)
             {
+                gotText = true;
                 bubble ??= Add(true);
                 bubble.Text += c.TextDelta;
+                fullText += c.TextDelta;
             }
             if (c.Done && c.Final is { } f)
             {
@@ -264,6 +310,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                         Pending.Add(new PendingCommandVm(cmd.Id, cmd.Shell, cmd.Command, cmd.Risk.ToString().ToLowerInvariant(), string.Join(" · ", cmd.Reasons)));
             }
         }
+
+        // She produced nothing — don't leave you staring at silence. Explain why.
+        if (!gotText)
+        {
+            var (ok, status) = await _svc.Llm.CheckAsync();
+            Add(true).Text = ok
+                ? "(Jawab aaya hi nahi — model se baat adhoori reh gayi. Dobara try karo; console mein /model se status dekho.)"
+                : $"(Main abhi soch nahi paa rahi: {status})";
+        }
+        else if (SpeakEnabled && fullText.Length > 0)
+            _voice.Speak(fullText, Profile.Language, mood ?? "neutral", a => Amplitude?.Invoke(a));
     }
 
     private ChatLineVm Add(bool her) { var l = new ChatLineVm(her, ""); Messages.Add(l); return l; }
@@ -286,5 +343,5 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void Raise([CallerMemberName] string? n = null) => PropertyChanged?.Invoke(this, new(n!));
 
     /// <inheritdoc />
-    public void Dispose() { _heartbeat.Stop(); _svc.Dispose(); _http.Dispose(); }
+    public void Dispose() { StopListening(); _voice.StopSpeaking(); _heartbeat.Stop(); _svc.Dispose(); _http.Dispose(); }
 }

@@ -72,9 +72,17 @@
         <Grid ColumnDefinitions="Auto,Auto,*,Auto">
           <TextBlock Grid.Column="0" Text="Ilham" Foreground="White" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"/>
           <TextBlock Grid.Column="1" Text="your companion" Margin="10,0,0,0" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
-          <Button Grid.Column="3" Content="⌨ Console" Click="OnToggleConsole" Background="#22ffffff"
-                  BorderBrush="{StaticResource Line}" CornerRadius="8" Padding="10,4"
-                  ToolTip.Tip="Open the console to edit her directly or run commands"/>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6">
+            <ToggleButton Content="🎙" IsChecked="{Binding MicEnabled}" IsVisible="{Binding CanListen}"
+                          Background="#22ffffff" BorderBrush="{StaticResource Line}" CornerRadius="8" Padding="9,4"
+                          ToolTip.Tip="Listen on the mic (speak to her)"/>
+            <ToggleButton Content="🔊" IsChecked="{Binding SpeakEnabled}" IsVisible="{Binding CanSpeak}"
+                          Background="#22ffffff" BorderBrush="{StaticResource Line}" CornerRadius="8" Padding="9,4"
+                          ToolTip.Tip="Speak her replies aloud"/>
+            <Button Content="⌨ Console" Click="OnToggleConsole" Background="#22ffffff"
+                    BorderBrush="{StaticResource Line}" CornerRadius="8" Padding="10,4"
+                    ToolTip.Tip="Open the console to edit her directly or run commands"/>
+          </StackPanel>
         </Grid>
       </Border>
 
