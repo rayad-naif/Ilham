@@ -3,6 +3,7 @@ using Ilham.Core;
 using Ilham.Core.Commands;
 using Ilham.Core.Emotions;
 using Ilham.Core.Guardian;
+using Ilham.Core.Initiative;
 using Ilham.Core.Llm;
 using Ilham.Core.Memory;
 using Ilham.Core.Profile;
@@ -184,5 +185,68 @@ public class GuardianTests
     {
         var profile = new UserProfile { Bedtime = new TimeOnly(0, 30), WakeTime = new TimeOnly(7, 0) };
         Assert.Equal(expected, HealthGuardian.IsBedtime(DateTimeOffset.Parse(nowIso), profile));
+    }
+}
+
+public class InitiativeTests
+{
+    private static (InitiativeEngine E, EmotionEngine Emo, FakeTimeProvider T) Make()
+    {
+        var t = new FakeTimeProvider(DateTimeOffset.Parse("2026-06-01T14:00:00Z"));
+        var emo = new EmotionEngine(t);
+        return (new InitiativeEngine(emo, t), emo, t);
+    }
+    private static readonly UserProfile P = new() { Name = "Rayad", Proactive = true };
+
+    [Fact]
+    public void Silence_EscalatesFromCheckInToDemandToSulk()
+    {
+        var (e, _, t) = Make();
+        e.NoteUserActivity();
+        var seen = new List<InitiativeKind>();
+        // Advance in chunks, collecting the escalation as silence grows.
+        foreach (var mins in new[] { 4, 7, 14, 30 })
+        {
+            t.SetUtcNow(DateTimeOffset.Parse("2026-06-01T14:00:00Z").AddMinutes(mins));
+            // give cooldown room each probe
+            var move = e.Consider(P, atKeyboard: true);
+            if (move is not null) seen.Add(move.Kind);
+            t.Advance(InitiativeEngine.Cooldown + TimeSpan.FromSeconds(1));
+        }
+        Assert.Contains(InitiativeKind.Demand, seen);
+        Assert.Contains(InitiativeKind.Sulk, seen);
+        Assert.True(seen.IndexOf(InitiativeKind.Demand) < seen.IndexOf(InitiativeKind.Sulk)); // demand before sulk
+    }
+
+    [Fact]
+    public void RespectsProactiveOff_AndEmptyChair()
+    {
+        var (e, _, t) = Make();
+        e.NoteUserActivity();
+        t.Advance(TimeSpan.FromMinutes(20));
+        Assert.Null(e.Consider(P with { Proactive = false }, atKeyboard: true)); // disabled
+        Assert.Null(e.Consider(P, atKeyboard: false));                           // nobody there
+    }
+
+    [Fact]
+    public void Cooldown_PreventsSpam()
+    {
+        var (e, _, t) = Make();
+        e.NoteUserActivity();
+        t.Advance(TimeSpan.FromMinutes(15));
+        Assert.NotNull(e.Consider(P, atKeyboard: true));
+        Assert.Null(e.Consider(P, atKeyboard: true)); // immediately after: silent
+    }
+
+    [Fact]
+    public void BeingIgnored_RaisesAnnoyance_AndAnswerForgives()
+    {
+        var (e, emo, t) = Make();
+        e.NoteUserActivity();
+        t.Advance(TimeSpan.FromMinutes(14));
+        e.Consider(P, atKeyboard: true); // a demand → annoyance up
+        Assert.True(emo.Snapshot()[Mood.Annoyed] > 0.1);
+        e.NoteUserActivity();            // he answers
+        Assert.True(emo.Snapshot()[Mood.Happy] > 0.3);
     }
 }

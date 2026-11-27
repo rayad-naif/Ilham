@@ -26,6 +26,7 @@ public sealed class IlhamHost : IDisposable
         Vault = new SecretVault(Memory);
         Emotions = new EmotionEngine();
         Guardian = new HealthGuardian(Emotions);
+        Initiative = new Core.Initiative.InitiativeEngine(Emotions);
         PcActions = Core.Guardian.PcActions.ForCurrentOs();
 
         var http = httpFactory.CreateClient("ollama");
@@ -51,6 +52,8 @@ public sealed class IlhamHost : IDisposable
     public EmotionEngine Emotions { get; }
     /// <summary>The health guardian.</summary>
     public HealthGuardian Guardian { get; }
+    /// <summary>Decides when she speaks on her own.</summary>
+    public Core.Initiative.InitiativeEngine Initiative { get; }
     /// <summary>OS actions (lock/shutdown/idle).</summary>
     public IPcActions PcActions { get; }
     /// <summary>The real local model client.</summary>

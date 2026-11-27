@@ -33,11 +33,17 @@ public sealed record UserProfile
     /// <summary>Local Ollama endpoint.</summary>
     public string OllamaUrl { get; init; } = "http://127.0.0.1:11434";
 
-    /// <summary>Which local model is her brain.</summary>
-    public string Model { get; init; } = "qwen2.5:7b";
+    /// <summary>
+    /// Which local model is her brain. Default is a small multilingual model that runs on modest hardware
+    /// (integrated GPU / CPU). Bump to qwen2.5:7b or 14b once you have a stronger GPU.
+    /// </summary>
+    public string Model { get; init; } = "qwen2.5:3b";
 
     /// <summary>Language she should prefer: "mix" (Roman Urdu + English), "english" or "urdu" (Urdu script).</summary>
     public string Language { get; init; } = "mix";
+
+    /// <summary>Whether she talks on her own (check-ins, teasing, nagging, demands) when you go quiet.</summary>
+    public bool Proactive { get; init; } = true;
 }
 
 /// <summary>Loads/saves the profile and the override password (PBKDF2-hashed, never stored in plain text).</summary>

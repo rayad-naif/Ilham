@@ -71,12 +71,26 @@ public sealed class IlhamBrain(ILlmClient llm, MemoryStore memory, EmotionEngine
     /// <param name="alert">The escalation step.</param>
     /// <param name="profile">User settings.</param>
     /// <param name="ct">Cancellation.</param>
-    public async IAsyncEnumerable<ReplyChunk> SpeakGuardianAsync(GuardianAlert alert, UserProfile profile, [EnumeratorCancellation] CancellationToken ct = default)
+    public IAsyncEnumerable<ReplyChunk> SpeakGuardianAsync(GuardianAlert alert, UserProfile profile, CancellationToken ct = default) =>
+        SpeakUnpromptedAsync(PersonaBuilder.GuardianInstruction(alert, profile), alert.FallbackLine,
+            alert.Level >= 3 ? Mood.Annoyed : Mood.Worried, profile, ct);
+
+    /// <summary>
+    /// Speaks an unprompted line (a health nudge, or an initiative) in her own voice. If the model is offline,
+    /// the supplied fallback line is used so she never goes silent.
+    /// </summary>
+    /// <param name="instruction">A one-off instruction telling her what to say and how.</param>
+    /// <param name="fallback">Canned line if the model can't answer.</param>
+    /// <param name="mood">The mood this line carries.</param>
+    /// <param name="profile">User settings.</param>
+    /// <param name="ct">Cancellation.</param>
+    public async IAsyncEnumerable<ReplyChunk> SpeakUnpromptedAsync(string instruction, string fallback, Mood mood,
+        UserProfile profile, [EnumeratorCancellation] CancellationToken ct = default)
     {
         var messages = new List<ChatMessage>
         {
-            new("system", SystemPrompt(profile, "health check")),
-            new("user", PersonaBuilder.GuardianInstruction(alert, profile)),
+            new("system", SystemPrompt(profile, instruction)),
+            new("user", instruction),
         };
         var raw = new StringBuilder();
         string shown = "";
@@ -85,12 +99,13 @@ public sealed class IlhamBrain(ILlmClient llm, MemoryStore memory, EmotionEngine
         {
             raw.Append(token);
             string visible = ReplyParser.VisiblePrefix(raw.ToString());
-            if (visible.Length > shown.Length) { any = true; string d = visible[shown.Length..]; shown = visible; yield return new ReplyChunk(d, alert.Level >= 3 ? Mood.Annoyed : Mood.Worried, false); }
+            if (visible.Length > shown.Length) { any = true; string d = visible[shown.Length..]; shown = visible; yield return new ReplyChunk(d, mood, false); }
         }
-        string text = any ? ReplyParser.Parse(raw.ToString()).Text : alert.FallbackLine; // model offline → canned line
-        if (!any) yield return new ReplyChunk(text, Mood.Worried, false);
-        memory.AddMessage("assistant", text, (alert.Level >= 3 ? Mood.Annoyed : Mood.Worried).ToString());
-        yield return new ReplyChunk("", null, true, new ParsedReply(text, Mood.Worried, [], [], []));
+        string text = any ? ReplyParser.Parse(raw.ToString()).Text : fallback; // model offline → canned line
+        if (!any) yield return new ReplyChunk(text, mood, false);
+        emotions.Feel(mood, 0.2, "I spoke to him");
+        memory.AddMessage("assistant", text, mood.ToString());
+        yield return new ReplyChunk("", mood, true, new ParsedReply(text, mood, [], [], []));
     }
 
     /// <summary>Approves a pending command and runs it, then lets Ilham react to the result.</summary>

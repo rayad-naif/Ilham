@@ -44,6 +44,7 @@ export async function openSettings({ state, save, onProfile }) {
         <div class="field"><label>Bedtime</label><input id="s-bed" type="time" value="${hm(profile.bedtime)}"></div>
         <div class="field"><label>Wake</label><input id="s-wake" type="time" value="${hm(profile.wakeTime)}"></div>
       </div>
+      <div class="toggle"><span>She talks on her own (check-ins, teasing, demands)</span><input id="s-proactive" type="checkbox" ${profile.proactive ? 'checked' : ''}></div>
       <div class="toggle"><span>Let her lock the screen if ignored</span><input id="s-lock" type="checkbox" ${profile.allowLock ? 'checked' : ''}></div>
       <div class="toggle"><span>Let her schedule shutdown at bedtime</span><input id="s-shut" type="checkbox" ${profile.allowShutdown ? 'checked' : ''}></div>
       <p class="note">She always gives a countdown, and you can always stop her with your override password.</p>
@@ -84,7 +85,7 @@ export async function openSettings({ state, save, onProfile }) {
         birthday: bday || null,
         bedtime: $('#s-bed').value + ':00', wakeTime: $('#s-wake').value + ':00',
         breakEveryMinutes: +$('#s-break').value, dailyLimitMinutes: +$('#s-limit').value,
-        allowLock: $('#s-lock').checked, allowShutdown: $('#s-shut').checked,
+        allowLock: $('#s-lock').checked, allowShutdown: $('#s-shut').checked, proactive: $('#s-proactive').checked,
         ollamaUrl: $('#s-url').value, model: $('#s-model').value, language: $('#s-lang').value,
       }) });
       onProfile?.();

@@ -24,7 +24,8 @@ Your conversations, memories and secrets never leave your machine.
 | 🗣️ **Voice** | Listens (Urdu/English speech) and speaks back with a female voice; her mouth lip-syncs. |
 | 📷 **Sees you (when you turn it on)** | Reads *your* expression from *your* webcam to sense your mood. A light shows when the camera is live. |
 | 🔐 **Guards your secrets** | An encrypted vault **you fill yourself** — she never scrapes your browser or OS. |
-| 🎭 **Animated face** | An expressive avatar that blinks, breathes, lip-syncs and emotes by mood. No model file needed; runs offline. |
+| 🎭 **Animated face** | An expressive avatar that blinks, breathes, lip-syncs, **wanders around**, and emotes by mood. No model file needed; runs offline. |
+| 🔔 **Talks first** | When you go quiet she doesn't just wait — she checks in, teases, gets impatient, then **demanding**, then sulks, the longer she's ignored. |
 
 ---
 
@@ -32,13 +33,19 @@ Your conversations, memories and secrets never leave your machine.
 
 **1. Install .NET** (8 or newer) from <https://dotnet.microsoft.com/download>.
 
-**2. Install Ollama** (her brain) from <https://ollama.com>, then download a model:
+**2. Install Ollama** (her brain) from <https://ollama.com>, then download a model sized to your hardware:
 ```bash
-ollama pull qwen2.5:7b
+ollama pull qwen2.5:3b
 ```
-On an 8 GB+ NVIDIA GPU this runs smoothly. Good alternatives: `llama3.1:8b`, `gemma2:9b`. For stronger Urdu
-and coding on more VRAM, try `qwen2.5:14b`. You pick the model in Settings — including uncensored community
-models from Hugging Face, which is your call on your own hardware.
+
+| Your hardware | Model | Notes |
+|---|---|---|
+| **Integrated GPU / CPU only** (e.g. Intel Iris Xe) | `qwen2.5:3b` (default) | Runs mostly on CPU at a few words/second — usable. For more speed: `qwen2.5:1.5b` or `gemma2:2b`. |
+| **6–8 GB NVIDIA** | `qwen2.5:7b`, `llama3.1:8b` | Smooth. |
+| **12 GB+ NVIDIA** | `qwen2.5:14b` | Best Urdu + coding. |
+
+You pick the model in Settings — including uncensored community models from Hugging Face, which is your call
+on your own hardware. She runs in demo mode (scripted) until a model is installed, so you can try everything first.
 
 **3. Run Ilham:**
 ```bash

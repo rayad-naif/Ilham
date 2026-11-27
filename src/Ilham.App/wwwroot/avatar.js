@@ -50,6 +50,41 @@ export class Avatar {
   /** Feed live speech loudness (0..1) so the mouth moves while she talks. */
   setAmplitude(a) { this.amp = Math.max(0, Math.min(1, a)); }
 
+  /** Makes her slowly drift around the given container, like a presence that moves. */
+  startWander(container) {
+    this.wrap = container;
+    if (!container) return;
+    container.style.position ||= 'relative';
+    const pick = () => {
+      // A new resting spot somewhere in the pane; demanding/angry moods roam wider and faster.
+      const roam = (this.mood === 'angry' || this.mood === 'annoyed') ? 0.34 : (this.mood === 'sad' ? 0.08 : 0.2);
+      this.wanderTo = { x: (Math.random() - 0.5) * 2 * roam, y: (Math.random() - 0.5) * 2 * roam * 0.7 };
+      this.wanderAt = 0; this.wanderDur = 4 + Math.random() * 5;
+    };
+    pick();
+    this.wanderPos ??= { x: 0, y: 0 };
+    const tick = (now) => {
+      const dt = Math.min(0.05, (now - (this._wlast || now)) / 1000); this._wlast = now;
+      this.wanderAt += dt;
+      if (this.wanderAt > this.wanderDur) pick();
+      const k = 1 - Math.pow(0.2, dt); // ease toward target spot
+      this.wanderPos.x = lerp(this.wanderPos.x, this.wanderTo.x, k * 0.5);
+      this.wanderPos.y = lerp(this.wanderPos.y, this.wanderTo.y, k * 0.5);
+      const bob = Math.sin(now / 700) * 0.01 + (this.pulseT > 0 ? Math.sin(this.pulseT * 30) * this.pulseT * 0.12 : 0);
+      if (this.pulseT > 0) this.pulseT = Math.max(0, this.pulseT - dt * 2.2);
+      this.canvas.style.transform =
+        `translate(${this.wanderPos.x * 100}%, ${(this.wanderPos.y + bob) * 100}%) scale(${1 + (this.pulseT || 0) * 0.08})`;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  /** A little bounce when she does something emphatic (an initiative, a demand). */
+  pulse(kind) {
+    this.pulseT = kind === 'demand' || kind === 'impatient' ? 1 : 0.6;
+    if (this.wanderTo) this.wanderAt = this.wanderDur; // re-pick a spot, so a demand makes her move
+  }
+
   _resize() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
     const size = Math.min(this.canvas.clientWidth, this.canvas.clientHeight) || 420;

@@ -38,6 +38,7 @@ app.MapGet("/api/chat", async (HttpContext ctx, string message, CancellationToke
 {
     ctx.Response.Headers.ContentType = "text/event-stream";
     ctx.Response.Headers.CacheControl = "no-cache";
+    host.Initiative.NoteUserActivity();
     var brain = await host.ActiveBrainAsync(ct);
     async Task Send(string ev, object data) { await ctx.Response.WriteAsync($"event: {ev}\ndata: {JsonSerializer.Serialize(data, json)}\n\n", ct); await ctx.Response.Body.FlushAsync(ct); }
 
@@ -54,8 +55,37 @@ app.MapGet("/api/chat", async (HttpContext ctx, string message, CancellationToke
         }
     }
     catch (OperationCanceledException) { /* client went away */ }
+    host.Initiative.NoteSpoke();
     // Keep the pending-command list reachable for the approval endpoints.
     PendingBridge.Replace(brain);
+});
+
+// ───────────────────────── her own initiative (she speaks first) ─────────────────────────
+// The UI polls this while idle. It returns her unprompted line only when she's "due" to speak; otherwise
+// an empty stream. She only talks to an occupied chair (OS idle time gates it).
+
+app.MapGet("/api/initiative", async (HttpContext ctx, CancellationToken ct) =>
+{
+    ctx.Response.Headers.ContentType = "text/event-stream";
+    ctx.Response.Headers.CacheControl = "no-cache";
+    async Task Send(string ev, object data) { await ctx.Response.WriteAsync($"event: {ev}\ndata: {JsonSerializer.Serialize(data, json)}\n\n", ct); await ctx.Response.Body.FlushAsync(ct); }
+
+    var profile = host.Profiles.Load();
+    bool atKeyboard = host.PcActions.Idle() < TimeSpan.FromMinutes(3);
+    var move = host.Initiative.Consider(profile, atKeyboard);
+    if (move is null) { await Send("none", new { }); return; }
+
+    var brain = await host.ActiveBrainAsync(ct);
+    try
+    {
+        await foreach (var chunk in brain.SpeakUnpromptedAsync(move.Instruction, move.Fallback, move.Mood, profile, ct))
+        {
+            if (chunk.TextDelta.Length > 0) await Send("delta", new { text = chunk.TextDelta, mood = move.Mood.ToString().ToLowerInvariant() });
+            if (chunk.Done) await Send("done", new { mood = move.Mood.ToString().ToLowerInvariant(), kind = move.Kind.ToString().ToLowerInvariant() });
+        }
+    }
+    catch (OperationCanceledException) { /* client went away */ }
+    host.Initiative.NoteSpoke();
 });
 
 // ───────────────────────── command approval ─────────────────────────

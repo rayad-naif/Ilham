@@ -51,6 +51,7 @@ async function send(text) {
   const bubble = addMessage('her typing');
   let full = '';
   voice.cancel();
+  busy = true;
 
   await streamChat(text, {
     onDelta: (delta, mood) => { full += delta; bubble.textContent = full; if (mood) setMood(mood); messagesEl.scrollTop = messagesEl.scrollHeight; },
@@ -62,6 +63,7 @@ async function send(text) {
     },
     onError: () => { bubble.classList.remove('typing'); if (!full) bubble.textContent = '… (main abhi soch nahi paa rahi — model check karo settings mein)'; },
   });
+  busy = false;
 }
 
 function streamChat(message, { onDelta, onDone, onError }) {
@@ -71,6 +73,33 @@ function streamChat(message, { onDelta, onDone, onError }) {
     es.addEventListener('done', e => { const d = JSON.parse(e.data); es.close(); onDone(d.mood, d.pending || []); resolve(); });
     es.onerror = () => { es.close(); onError?.(); resolve(); };
   });
+}
+
+// ── She speaks first: poll for her unprompted lines (check-ins, teasing, nagging, demands, sulking) ──
+let busy = false;
+window.__tryInit = () => tryInitiative();
+async function tryInitiative() {
+  if (busy || document.hidden) return;
+  busy = true;
+  await new Promise(resolve => {
+    const es = new EventSource('/api/initiative');
+    let bubble = null, full = '';
+    es.addEventListener('none', () => { es.close(); resolve(); });
+    es.addEventListener('delta', e => {
+      const d = JSON.parse(e.data);
+      if (!bubble) bubble = addMessage('her');
+      full += d.text; bubble.textContent = full; if (d.mood) setMood(d.mood);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+    es.addEventListener('done', e => {
+      const d = JSON.parse(e.data); es.close();
+      setMood(d.mood);
+      if (full) { if (state.speakOn) voice.speak(full, state.lang, d.mood); avatar.pulse(d.kind); }
+      resolve();
+    });
+    es.onerror = () => { es.close(); resolve(); };
+  });
+  busy = false;
 }
 
 // ── Command approval cards ──
@@ -189,6 +218,9 @@ setMood('neutral');
 refreshState(); refreshModel();
 setInterval(refreshState, 15000);
 setInterval(refreshModel, 30000);
+// She checks whether she wants to say something on her own, every ~20s.
+setInterval(tryInitiative, 20000);
+avatar.startWander($('.face-pane'));
 
 // A gentle hello once she's ready.
 fetch('/api/memory').then(r => r.json()).then(d => {
