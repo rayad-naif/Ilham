@@ -13,4 +13,10 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="$(IlhamDotNetMajor).0.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ilham ships knowing her own docs (self-knowledge) -->
+    <EmbeddedResource Include="..\..\docs\*.md" LogicalName="Ilham.Core.SelfDocs.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\README.md" LogicalName="Ilham.Core.SelfDocs.README.md" />
+  </ItemGroup>
+
 </Project>

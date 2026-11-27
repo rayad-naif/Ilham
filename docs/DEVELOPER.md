@@ -202,6 +202,19 @@ the P/Invoke in `PcActions`), and `InternalsVisibleTo=Ilham.Tests`.
 - **`ExportToFile`** writes it; **`TrainingRecipe`** returns a ready-to-run Unsloth LoRA script.
 - **Customize:** change `windowTurns`, the dataset format, or the base model / hyper-parameters in the recipe.
 
+### `Console/ConsoleProcessor.cs`  (edit her directly)
+The built-in console behind the **⌨ Console** button. A line starting with `/` is a meta-command
+(`/set`, `/profile`, `/facts`, `/remember`, `/occasion`, `/outfit`, `/vault …`, `/model`, `/docs`, `/doc`,
+`/password`); anything else runs as a shell command in your chosen shell. You type these yourself, so they run
+without the approval gate — you're the operator. Fully unit-tested.
+- **Customize:** add a `case` in `RunAsync` for a new `/command`.
+
+### `Persona/SelfKnowledge.cs`  (she knows her own code)
+Her docs (README + everything in `docs/`) are compiled into the assembly, split into sections, and retrieved
+by relevance. When you ask how she's built or where a feature lives, `IlhamBrain` adds the matching sections to
+her prompt, so she answers honestly from her real documentation. `/docs` and `/doc <name>` list them.
+- **Customize:** edit the docs — they're re-embedded on build, so her self-knowledge updates automatically.
+
 ### `IlhamBrain.cs`  (orchestration — ties it all together)
 - **`record ReplyChunk`** — a streamed piece of her reply (text delta + mood + final parsed result).
 - **`class IlhamBrain`** — the heart:

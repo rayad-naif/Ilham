@@ -427,3 +427,76 @@ public class OutfitWardrobeTests
         Assert.Null(Ilham.Core.Persona.ReplyParser.Parse("[outfit: spacesuit]").Outfit); // unknown → ignored
     }
 }
+
+public class SelfKnowledgeTests
+{
+    [Fact]
+    public void SheKnowsHerOwnDocs()
+    {
+        Assert.Contains("README.md", Ilham.Core.Persona.SelfKnowledge.Documents);
+        Assert.Contains("DEVELOPER.md", Ilham.Core.Persona.SelfKnowledge.Documents);
+        Assert.True(Ilham.Core.Persona.SelfKnowledge.All.Count > 20); // many sections
+    }
+
+    [Fact]
+    public void Retrieve_FindsRelevantArchitecture_AndIgnoresChitChat()
+    {
+        var hits = Ilham.Core.Persona.SelfKnowledge.Retrieve("how is your memory and vault built?");
+        Assert.NotEmpty(hits);
+        Assert.Contains(hits, h => (h.Text + h.Heading).Contains("vault", StringComparison.OrdinalIgnoreCase)
+                                || (h.Text + h.Heading).Contains("memory", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(Ilham.Core.Persona.SelfKnowledge.Retrieve("i love you jaan"));
+    }
+}
+
+public class ConsoleProcessorTests
+{
+    private static Ilham.Core.Console.ConsoleProcessor Make(out MemoryStore mem)
+    {
+        mem = new MemoryStore(":memory:");
+        var profiles = new ProfileStore(mem);
+        var vault = new SecretVault(mem);
+        return new Ilham.Core.Console.ConsoleProcessor(mem, profiles, vault, model => (true, "demo"));
+    }
+
+    [Fact]
+    public async Task SetAndProfile_EditHerDirectly()
+    {
+        var c = Make(out var mem);
+        Assert.Contains("Set name", await c.RunAsync("/set name Rayad"));
+        Assert.Contains("qwen2.5:32b", await c.RunAsync("/set model qwen2.5:32b"));
+        var profile = new ProfileStore(mem).Load();
+        Assert.Equal("Rayad", profile.Name);
+        Assert.Equal("qwen2.5:32b", profile.Model);
+        Assert.Contains("name: Rayad", await c.RunAsync("/profile"));
+    }
+
+    [Fact]
+    public async Task Memory_Vault_Outfit_Docs_Commands()
+    {
+        var c = Make(out _);
+        Assert.Contains("Remembered", await c.RunAsync("/remember I love nihari"));
+        Assert.Contains("nihari", await c.RunAsync("/facts"));
+        Assert.Contains("Maroon", await c.RunAsync("/outfit Maroon"));
+        Assert.Contains("README.md", await c.RunAsync("/docs"));
+        Assert.Contains("Vault created", await c.RunAsync("/vault init masterpass"));
+        await c.RunAsync("/vault add Netflix | hunter2");
+        Assert.Equal("hunter2", (await c.RunAsync("/vault reveal 1")).Trim());
+    }
+
+    [Fact]
+    public async Task PlainLine_RunsAsShellCommand()
+    {
+        var c = Make(out _);
+        c.Shell = OperatingSystem.IsWindows() ? "cmd" : "bash";
+        Assert.Contains("hello-console", await c.RunAsync("echo hello-console"));
+    }
+
+    [Fact]
+    public async Task UnknownCommand_IsHandledGracefully()
+    {
+        var c = Make(out _);
+        Assert.Contains("Unknown command", await c.RunAsync("/wat"));
+        Assert.Contains("Console", await c.RunAsync("/help"));
+    }
+}

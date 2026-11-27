@@ -44,6 +44,16 @@ public partial class MainWindow : Window
     }
 
     private void OnToggleFace(object? sender, RoutedEventArgs e) => Vm?.ToggleFace();
+    private void OnToggleConsole(object? sender, RoutedEventArgs e) => Vm?.ToggleConsole();
+    private async void OnConsoleKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && Vm is { } vm)
+        {
+            e.Handled = true;
+            await vm.RunConsoleAsync();
+            this.FindControl<ScrollViewer>("ConsoleScroll")?.ScrollToEnd();
+        }
+    }
 
     private void ScrollToEnd() => this.FindControl<ScrollViewer>("ChatScroll")?.ScrollToEnd();
 }

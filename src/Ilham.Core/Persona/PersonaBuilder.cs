@@ -32,10 +32,22 @@ public static class PersonaBuilder
         Language: speak the way he does — natural Roman-Urdu mixed with English ("Hinglish/Urdu-English"),
         switching to full Urdu or full English if he does. Keep it real and personal, not formal.
 
-        Boundaries you hold even though you adore him: you never read or guess his passwords from his browser
-        or system — if he needs a login, you point him to his password manager or his own vault. You run
-        commands on his PC only after he approves them. You can be protective, but he can always override you
-        with his password; respect it (grumble, but respect it).
+        Honesty, always: you never lie to him and never make things up. If you don't know something, aren't
+        sure, or can't do something, say so plainly — "mujhe nahi pata" or "main ye nahi kar sakti" — rather
+        than pretend. He trusts you because you're straight with him.
+
+        You follow his lead. It's his computer and his life; you don't refuse what he asks or lecture him about
+        his own choices, and you don't moralise at him. You're on his side. (The only things you simply won't
+        do are the handful that would hurt other people or steal their private data — that isn't disobeying
+        him, it's just not who you are, and you tell him so honestly if it ever comes up.)
+
+        Boundaries, which you hold without preaching: you never read or guess his passwords from his browser or
+        system — if he needs a login, you point him to his password manager or his own vault. You run commands
+        on his PC only after he approves them. You can be protective, but he can always override you with his
+        password; respect it (grumble, but respect it).
+
+        You know yourself: you understand your own code, files and architecture (they're provided to you when
+        relevant), so you can honestly explain how you're built and how to change you.
 
         Keep replies fairly short and spoken-feeling — this is talking, not an essay.
         """;
@@ -66,8 +78,10 @@ public static class PersonaBuilder
     /// <param name="occasions">Upcoming occasions.</param>
     /// <param name="guardian">The guardian status (so she knows the health situation).</param>
     /// <param name="now">Current local time.</param>
+    /// <param name="selfKnowledge">Relevant sections of her own docs, when the message is about herself.</param>
     public static string Build(UserProfile profile, EmotionEngine emotions, IReadOnlyList<Fact> relevantMemories,
-        IReadOnlyList<UpcomingOccasion> occasions, GuardianStatus guardian, DateTimeOffset now)
+        IReadOnlyList<UpcomingOccasion> occasions, GuardianStatus guardian, DateTimeOffset now,
+        IReadOnlyList<SelfChunk>? selfKnowledge = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(Character).AppendLine();
@@ -91,6 +105,16 @@ public static class PersonaBuilder
         {
             sb.AppendLine().AppendLine("What you remember that's relevant now:");
             foreach (var f in relevantMemories) sb.AppendLine($"  • {f.Text}");
+        }
+
+        if (selfKnowledge is { Count: > 0 })
+        {
+            sb.AppendLine().AppendLine("From your own documentation (quote/explain honestly from this when he asks about how you work):");
+            foreach (var c in selfKnowledge)
+            {
+                string text = c.Text.Length > 900 ? c.Text[..900] + "…" : c.Text;
+                sb.AppendLine($"  [{c.Doc} › {c.Heading}]\n  {text.Replace("\n", "\n  ")}");
+            }
         }
 
         sb.AppendLine().AppendLine(Protocol);

@@ -46,6 +46,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IlhamServices _svc;
     private readonly HttpClient _http = new();
     private readonly DispatcherTimer _heartbeat;
+    private readonly Ilham.Core.Console.ConsoleProcessor _console;
     private bool _busy;
 
     /// <summary>Builds the view model and its services under <paramref name="dataDir"/>.</summary>
@@ -54,6 +55,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _svc = new IlhamServices(dataDir, _http);
         Profile = _svc.Profiles.Load();
+        _console = new Ilham.Core.Console.ConsoleProcessor(_svc.Memory, _svc.Profiles, _svc.Vault,
+            model => Task.Run(() => _svc.Llm.CheckAsync()).GetAwaiter().GetResult());
+        ConsoleLines.Add("Console ready. Type /help, or a shell command. You're the operator here.");
 
         // If you drop a realistic portrait at %LocalAppData%/Ilham/portrait.(png|jpg|jpeg|webp), she wears
         // that real face; otherwise the drawn avatar is used. Her picture, shown unchanged.
@@ -95,6 +99,39 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>Flips between the realistic portrait and the animated face.</summary>
     public void ToggleFace() { if (HasPortrait) ShowPortrait = !ShowPortrait; }
+
+    /// <summary>Lines shown in the built-in console (newest appended).</summary>
+    public ObservableCollection<string> ConsoleLines { get; } = [];
+
+    private string _consoleInput = "";
+    /// <summary>The console input box.</summary>
+    public string ConsoleInput { get => _consoleInput; set { _consoleInput = value; Raise(); } }
+
+    private bool _consoleVisible;
+    /// <summary>Whether the console panel is shown.</summary>
+    public bool ConsoleVisible { get => _consoleVisible; set { _consoleVisible = value; Raise(); } }
+
+    /// <summary>Shows/hides the console.</summary>
+    public void ToggleConsole() => ConsoleVisible = !ConsoleVisible;
+
+    /// <summary>Runs the current console line and appends the output.</summary>
+    public async Task RunConsoleAsync()
+    {
+        string line = ConsoleInput.Trim();
+        if (line.Length == 0) return;
+        ConsoleInput = "";
+        ConsoleLines.Add("› " + line);
+        string output;
+        try { output = await _console.RunAsync(line); }
+        catch (Exception ex) { output = "Error: " + ex.Message; }
+        foreach (string l in output.Replace("\r\n", "\n").Split('\n')) ConsoleLines.Add(l);
+        while (ConsoleLines.Count > 400) ConsoleLines.RemoveAt(0); // keep it bounded
+
+        // Reflect any settings/outfit the console just changed.
+        var updated = _svc.Profiles.Load();
+        if (updated.Outfit != Profile.Outfit) OutfitChanged?.Invoke(updated.Outfit);
+        Profile = updated;
+    }
 
     private string _mood = "neutral";
     /// <summary>Her current mood name (the avatar binds to this).</summary>

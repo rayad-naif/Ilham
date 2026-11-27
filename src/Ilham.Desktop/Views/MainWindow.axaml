@@ -40,18 +40,42 @@
         <TextBlock Text="{Binding Mood}" Foreground="White" FontSize="13"/>
       </Border>
       <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="16"
-              Background="#10ffffff" CornerRadius="999" Padding="11,5" BorderBrush="{StaticResource Line}" BorderThickness="1">
+              Background="#10ffffff" CornerRadius="999" Padding="11,5" BorderBrush="{StaticResource Line}" BorderThickness="1"
+              IsVisible="{Binding !ConsoleVisible}">
         <TextBlock Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="12" MaxWidth="260" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+      </Border>
+
+      <!-- Built-in console: edit her directly (/help) or run shell commands. -->
+      <Border VerticalAlignment="Stretch" Margin="12,56,12,12" Background="#e60b0a12" CornerRadius="10"
+              BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="10" IsVisible="{Binding ConsoleVisible}">
+        <DockPanel>
+          <TextBox DockPanel.Dock="Bottom" Name="ConsoleInput" Text="{Binding ConsoleInput}" Margin="0,8,0,0"
+                   Watermark="/help  ·  or a shell command" KeyDown="OnConsoleKey"
+                   FontFamily="Consolas,'DejaVu Sans Mono',monospace" Background="#141221" BorderBrush="{StaticResource Line}"/>
+          <ScrollViewer Name="ConsoleScroll">
+            <ItemsControl ItemsSource="{Binding ConsoleLines}" x:CompileBindings="False">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" FontFamily="Consolas,'DejaVu Sans Mono',monospace" FontSize="12"
+                             Foreground="#d7f7e4" TextWrapping="Wrap"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
       </Border>
     </Panel>
 
     <!-- Conversation -->
     <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Background="#141221">
       <Border Grid.Row="0" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="18,14">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <TextBlock Text="Ilham" Foreground="White" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"/>
-          <TextBlock Text="your companion" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
-        </StackPanel>
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+          <TextBlock Grid.Column="0" Text="Ilham" Foreground="White" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="1" Text="your companion" Margin="10,0,0,0" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+          <Button Grid.Column="3" Content="⌨ Console" Click="OnToggleConsole" Background="#22ffffff"
+                  BorderBrush="{StaticResource Line}" CornerRadius="8" Padding="10,4"
+                  ToolTip.Tip="Open the console to edit her directly or run commands"/>
+        </Grid>
       </Border>
 
       <ScrollViewer Grid.Row="1" Name="ChatScroll" Padding="16">

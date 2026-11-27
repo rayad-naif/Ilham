@@ -161,7 +161,8 @@ public sealed class IlhamBrain(ILlmClient llm, MemoryStore memory, EmotionEngine
     {
         var relevant = memory.Search(context, 6).Select(s => s.Fact).ToList();
         var occasions = OccasionCalendar.Upcoming(profile, memory.Occasions(), DateOnly.FromDateTime(_clock.GetLocalNow().DateTime));
-        return PersonaBuilder.Build(profile, emotions, relevant, occasions, guardian.Status(profile), _clock.GetLocalNow());
+        var self = SelfKnowledge.Retrieve(context); // her own docs, when he asks how she works
+        return PersonaBuilder.Build(profile, emotions, relevant, occasions, guardian.Status(profile), _clock.GetLocalNow(), self);
     }
 
     private async IAsyncEnumerable<string> SafeStream(IReadOnlyList<ChatMessage> messages, [EnumeratorCancellation] CancellationToken ct)
