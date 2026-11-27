@@ -171,12 +171,17 @@ public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
     /// <inheritdoc />
     public bool CanListen => _fallback.CanListen;
 
+    /// <summary>Set when the last cloud-voice attempt failed, so the console can explain why she sounded robotic.</summary>
+    public string? LastError { get; private set; }
+
     /// <inheritdoc />
     public void Speak(string text, string language, string mood, Action<double> amplitude)
     {
-        if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(text)) return;
+        if (!OperatingSystem.IsWindows()) return;
+        string spoken = SpeechText.Clean(text); // no emojis, markdown or tags read aloud
+        if (spoken.Length == 0) return;
         string url = ttsUrl().Trim();
-        if (url.Length == 0) { _fallback.Speak(text, language, mood, amplitude); return; }
+        if (url.Length == 0) { _fallback.Speak(spoken, language, mood, amplitude); return; }
 
         StopSpeaking();
         var cts = new CancellationTokenSource();
@@ -185,17 +190,54 @@ public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
         {
             try
             {
-                byte[] audio = await FetchAsync(url, text, VoiceFor(language), RateFor(mood), cts.Token);
+                byte[] audio = await FetchAsync(url, spoken, VoiceFor(language), RateFor(mood), PitchFor(mood), cts.Token);
                 if (cts.Token.IsCancellationRequested) return;
+                LastError = null;
                 Play(audio, amplitude, cts.Token);
             }
             catch (OperationCanceledException) { amplitude(0); }
-            catch
+            catch (Exception ex)
             {
-                // Cloud voice unreachable — don't leave her silent; use the built-in voice.
-                if (!cts.Token.IsCancellationRequested) _fallback.Speak(text, language, mood, amplitude);
+                // Cloud voice unreachable/failed — record why, and don't leave her silent.
+                LastError = ex.Message;
+                if (!cts.Token.IsCancellationRequested) _fallback.Speak(spoken, language, mood, amplitude);
             }
         }, cts.Token);
+    }
+
+    /// <summary>
+    /// Diagnoses the neural voice end-to-end and returns a human-readable result: whether a URL is set, whether
+    /// the endpoint answered, how much audio came back, and whether it decoded — so a robotic voice is never a
+    /// silent mystery. Also plays the sample if it worked.
+    /// </summary>
+    public async Task<string> TestAsync(string language, Action<double> amplitude)
+    {
+        string url = ttsUrl().Trim();
+        if (url.Length == 0)
+            return "No voice URL set — she's using the built-in Windows voice (robotic). Set one with /set ttsurl <url> from your Kaggle cell.";
+        string sample = language?.ToLowerInvariant() == "english"
+            ? "Hi, this is my real voice. Can you hear me clearly?"
+            : "Assalam o alaikum, yeh meri asli awaaz hai. Theek lag rahi hai?";
+        try
+        {
+            byte[] audio = await FetchAsync(url, sample, VoiceFor(language), "+0%", "+0Hz", CancellationToken.None);
+            if (audio.Length < 128) return $"Voice endpoint answered but sent only {audio.Length} bytes — the server may have errored. Check the Kaggle cell for a /tts error.";
+            string kind = audio.Length > 4 && audio[0] == 'R' && audio[1] == 'I' && audio[2] == 'F' && audio[3] == 'F' ? "WAV" : "MP3";
+            try
+            {
+                StopSpeaking();
+                Play(audio, amplitude, CancellationToken.None);
+                return $"✓ Neural voice OK — {audio.Length} bytes of {kind} playing now. If you heard it, the natural voice works.";
+            }
+            catch (Exception ex)
+            {
+                return $"Audio came back ({audio.Length} bytes, {kind}) but playback failed here: {ex.Message}. That's why she sounds robotic — tell me this and I'll switch the audio format.";
+            }
+        }
+        catch (Exception ex)
+        {
+            return $"Couldn't reach the voice endpoint: {ex.Message}. Is the Kaggle cell running and the /set ttsurl value the SECOND (voice) URL it printed?";
+        }
     }
 
     /// <inheritdoc />
@@ -215,9 +257,9 @@ public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
     /// <inheritdoc />
     public Task<string?> ListenOnceAsync(CancellationToken ct) => _fallback.ListenOnceAsync(ct);
 
-    private async Task<byte[]> FetchAsync(string url, string text, string voice, string rate, CancellationToken ct)
+    private async Task<byte[]> FetchAsync(string url, string text, string voice, string rate, string pitch, CancellationToken ct)
     {
-        var payload = System.Text.Json.JsonSerializer.Serialize(new { text, voice, rate });
+        var payload = System.Text.Json.JsonSerializer.Serialize(new { text, voice, rate, pitch });
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{url.TrimEnd('/')}/tts")
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json"),
@@ -253,7 +295,7 @@ public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
     }
 
     // "mix"/"urdu" → a real Pakistani Urdu female voice; "english" → a natural English female voice.
-    private static string VoiceFor(string language) =>
+    private static string VoiceFor(string? language) =>
         language?.ToLowerInvariant() == "english" ? "en-US-AriaNeural" : "ur-PK-UzmaNeural";
 
     // Mood → speaking rate (edge-tts percentage), so she sounds lively or subdued to match her feeling.
@@ -266,6 +308,47 @@ public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
         "sad" => "-12%",
         _ => "+0%",
     };
+
+    // Mood → pitch, so her feeling colours the voice, not just its speed.
+    private static string PitchFor(string mood) => mood switch
+    {
+        "excited" => "+18Hz",
+        "happy" or "loving" => "+10Hz",
+        "teasing" => "+8Hz",
+        "angry" => "+6Hz",
+        "worried" => "-6Hz",
+        "sad" => "-14Hz",
+        _ => "+0Hz",
+    };
+}
+
+/// <summary>
+/// Cleans a reply so it is spoken, not spelled out: strips emojis, variation selectors and markdown symbols so
+/// she never reads "red heart" or "asterisk", and flattens whitespace. The chat bubble keeps the emojis; only
+/// the spoken copy is cleaned.
+/// </summary>
+public static class SpeechText
+{
+    public static string Clean(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var sb = new StringBuilder(text.Length);
+        foreach (var rune in text.EnumerateRunes())
+        {
+            int v = rune.Value;
+            // Drop emoji & pictographs, dingbats, symbols, arrows, flags, ZWJ and variation selectors.
+            if (v >= 0x1F000 || v == 0x200D || v == 0xFE0F || (v >= 0x2190 && v <= 0x27BF) || (v >= 0x2B00 && v <= 0x2BFF))
+                continue;
+            var cat = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(rune.ToString(), 0);
+            if (cat == System.Globalization.UnicodeCategory.OtherSymbol) continue;
+            // Markdown/formatting noise that shouldn't be read aloud.
+            if (v is '*' or '_' or '#' or '`' or '~' or '>' or '|') { sb.Append(' '); continue; }
+            sb.Append(rune.ToString());
+        }
+        // Collapse runs of whitespace to single spaces.
+        var cleaned = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+        return cleaned;
+    }
 }
 
 /// <summary>Wraps a sample stream and reports its running loudness (0..1) so the avatar's mouth tracks speech.</summary>
