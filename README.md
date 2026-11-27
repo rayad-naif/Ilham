@@ -138,4 +138,4 @@ Ilham.sln
   and the HTTP API all have tests. `dotnet test` → 67 passing.
 - **Runs on .NET 8–11.** The project targets whatever SDK you have (see `Directory.Build.props`).
 
-More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/BOUNDARIES.md](docs/BOUNDARIES.md) · [docs/PHONE.md](docs/PHONE.md) · [docs/AVATAR.md](docs/AVATAR.md)
+More: **[docs/DEVELOPER.md](docs/DEVELOPER.md)** (every file + how to customize) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/BOUNDARIES.md](docs/BOUNDARIES.md) · [docs/PHONE.md](docs/PHONE.md) · [docs/AVATAR.md](docs/AVATAR.md)
