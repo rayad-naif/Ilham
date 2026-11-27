@@ -59,7 +59,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Profile = _svc.Profiles.Load();
         _voice = Services.Voice.Create(() => Profile.TtsUrl); // natural cloud voice when a /tts URL is set
         _console = new Ilham.Core.Console.ConsoleProcessor(_svc.Memory, _svc.Profiles, _svc.Vault,
-            model => Task.Run(() => _svc.Llm.CheckAsync()).GetAwaiter().GetResult());
+            model => Task.Run(() => _svc.Llm.CheckAsync()).GetAwaiter().GetResult(),
+            () => _voice is Services.CloudEdgeVoice cv
+                ? cv.TestAsync(Profile.Language, a => Amplitude?.Invoke(a))
+                : Task.FromResult("Voice test only available on Windows."));
         ConsoleLines.Add("Console ready. Type /help, or a shell command. You're the operator here.");
         _speakEnabled = _voice.CanSpeak; // she talks by default where speech is available
 

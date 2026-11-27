@@ -15,7 +15,7 @@ namespace Ilham.Core.Console;
 /// you are the operator here, not her.
 /// </summary>
 public sealed class ConsoleProcessor(MemoryStore memory, ProfileStore profiles, SecretVault vault,
-    Func<string, (bool Ok, string Status)>? modelCheck = null)
+    Func<string, (bool Ok, string Status)>? modelCheck = null, Func<Task<string>>? voiceTest = null)
 {
     /// <summary>Which shell `plain` commands run in ("cmd", "powershell" or "bash").</summary>
     public string Shell { get; set; } = OperatingSystem.IsWindows() ? "powershell" : "bash";
@@ -51,6 +51,7 @@ public sealed class ConsoleProcessor(MemoryStore memory, ProfileStore profiles, 
                 "occasion" => AddOccasion(arg),
                 "outfit" => SetOutfit(arg),
                 "model" => modelCheck is null ? "(model status unavailable)" : Model(),
+                "tts" or "voicetest" => voiceTest is null ? "(voice test unavailable)" : await voiceTest(),
                 "docs" => "She knows: " + string.Join(", ", SelfKnowledge.Documents),
                 "doc" => ShowDoc(arg),
                 "vault" => Vault(arg),
@@ -77,6 +78,7 @@ public sealed class ConsoleProcessor(MemoryStore memory, ProfileStore profiles, 
           /occasions  /occasion <Title> | MM-DD
           /outfit <name>               change what she's wearing now
           /model                       model status
+          /tts                         test the neural voice (says why it's robotic if it falls back)
           /docs  /doc <NAME>           her own documentation
           /vault  /vault init <pw>  /vault unlock <pw>  /vault add <Title> | <secret>  /vault reveal <id>  /vault lock
           /shell cmd|powershell|bash   choose the shell for plain commands
