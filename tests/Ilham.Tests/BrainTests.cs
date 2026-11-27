@@ -65,11 +65,12 @@ public class BrainTests
     public async Task Respond_QueuesCommandForApproval_DoesNotRunUntilApproved()
     {
         var (brain, _, llm, _) = Make();
-        llm.Enqueue("Sure [mood:teasing] [run:bash: echo hello-from-ilham]");
+        string shell = OperatingSystem.IsWindows() ? "cmd" : "bash"; // use a shell the host actually has
+        llm.Enqueue($"Sure [mood:teasing] [run:{shell}: echo hello-from-ilham]");
         await Collect(brain.RespondAsync("print hello"));
 
         var pending = brain.Pending.Single();
-        Assert.Equal("bash", pending.Shell);
+        Assert.Equal(shell, pending.Shell);
         Assert.Equal(Risk.Safe, pending.Risk);
 
         llm.Enqueue("[mood:happy] dekha, ho gaya");
