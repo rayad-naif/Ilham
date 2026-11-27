@@ -48,16 +48,22 @@ public sealed class AvatarControl : Control
     /// <param name="y">Vertical.</param>
     public void LookAt(double x, double y) => _state.LookAt(x, y);
 
+    private Outfit _outfit = Outfits.Mustard;
+
+    /// <summary>Changes what she's wearing by outfit name (see <c>Ilham.Rendering.Outfits</c>).</summary>
+    /// <param name="name">Outfit name; unknown names fall back to the default.</param>
+    public void SetOutfit(string name) => _outfit = Outfits.ByName(name);
+
     /// <inheritdoc />
     public override void Render(DrawingContext context)
     {
         double side = Math.Min(Bounds.Width, Bounds.Height);
         if (side < 1) return;
-        context.Custom(new FaceDraw(new Rect(0, 0, Bounds.Width, Bounds.Height), _state, side));
+        context.Custom(new FaceDraw(new Rect(0, 0, Bounds.Width, Bounds.Height), _state, side, _outfit));
     }
 
     /// <summary>A Skia custom-draw operation that hands the renderer a real SKCanvas.</summary>
-    private sealed class FaceDraw(Rect bounds, AvatarState state, double side) : ICustomDrawOperation
+    private sealed class FaceDraw(Rect bounds, AvatarState state, double side, Outfit outfit) : ICustomDrawOperation
     {
         public Rect Bounds => bounds;
         public void Dispose() { }
@@ -73,7 +79,7 @@ public sealed class AvatarControl : Control
             canvas.Save();
             // Centre the square face within the control.
             canvas.Translate((float)((bounds.Width - side) / 2), (float)((bounds.Height - side) / 2));
-            AvatarRenderer.Draw(canvas, (float)side, state, background: null);
+            AvatarRenderer.Draw(canvas, (float)side, state, background: null, outfit: outfit);
             canvas.Restore();
         }
     }

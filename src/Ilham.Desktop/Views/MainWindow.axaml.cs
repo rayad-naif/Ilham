@@ -18,6 +18,7 @@ public partial class MainWindow : Window
             if (DataContext is MainViewModel vm)
             {
                 var avatar = this.FindControl<AvatarControl>("Avatar");
+                avatar?.SetOutfit(vm.Profile.Outfit);
                 vm.MoodChanged += mood => avatar?.SetMood(mood);
                 vm.Amplitude += amp => avatar?.SetAmplitude(amp);
                 vm.Messages.CollectionChanged += (_, _) => ScrollToEnd();

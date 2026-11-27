@@ -240,6 +240,12 @@ the P/Invoke in `PcActions`), and `InternalsVisibleTo=Ilham.Tests`.
 - **Verify changes instantly:** `ILHAM_FACE_OUT=./faces dotnet test --filter AvatarRenderTests` renders every
   mood to a PNG.
 
+### `Outfit.cs`
+- **`readonly record struct Outfit`** — a kameez/dupatta/trim colour set, and **`static class Outfits`** — her
+  wardrobe (Mustard, Teal, Maroon, Royal blue, Emerald, Rose, Black, Lavender), with `All` and `ByName`.
+- **Customize:** add an `Outfit` here (any colours), add it to `All`, and it shows up everywhere. The desktop
+  app picks one via `UserProfile.Outfit`; `AvatarControl.SetOutfit(name)` applies it.
+
 ### `Ilham.Rendering.csproj`
 References `SkiaSharp`. Cross-platform; the Linux native assets come in via the test project for headless
 rendering.

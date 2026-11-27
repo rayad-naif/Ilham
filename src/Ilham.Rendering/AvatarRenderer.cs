@@ -15,8 +15,10 @@ public static class AvatarRenderer
     /// <param name="size">Side length in pixels.</param>
     /// <param name="s">Animation state.</param>
     /// <param name="background">Optional background fill (null = transparent, for the floating pet).</param>
-    public static void Draw(SKCanvas canvas, float size, AvatarState s, SKColor? background = null)
+    /// <param name="outfit">What she's wearing; defaults to the mustard kameez styled after the reference.</param>
+    public static void Draw(SKCanvas canvas, float size, AvatarState s, SKColor? background = null, Outfit? outfit = null)
     {
+        var fit = outfit ?? Outfits.Mustard;
         if (background is { } bg) canvas.Clear(bg); else canvas.Clear(SKColors.Transparent);
         var e = s.Current;
         float cx = size / 2, cy = size / 2;
@@ -32,9 +34,9 @@ public static class AvatarRenderer
         var skinShade = new SKColor(0xd6, 0x9d, 0x75);
         var hair = Hsl(272, 0.28, 0.12);
         var hairLit = Hsl(280, 0.26, 0.20);
-        var kameez = new SKColor(0xe0, 0xa5, 0x33);       // mustard/gold
-        var kameezShade = new SKColor(0xc6, 0x8c, 0x22);
-        var dupatta = new SKColor(0xf0, 0xe6, 0xcf);       // cream
+        var kameez = fit.Kameez;
+        var kameezShade = fit.KameezShade;
+        var dupatta = fit.Dupatta;
         float fw = size * 0.30f, fh = size * 0.38f;
 
         using var fill = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
@@ -60,7 +62,7 @@ public static class AvatarRenderer
             fill.Shader = kg; canvas.DrawPath(body, fill); fill.Shader = null;
         }
         // Embroidered neckline hint.
-        stroke.Color = new SKColor(0xf2, 0xd9, 0x9a); stroke.StrokeWidth = size * 0.010f;
+        stroke.Color = fit.Trim; stroke.StrokeWidth = size * 0.010f;
         using (var neckline = new SKPath()) { neckline.MoveTo(-fw * 0.34f, fh * 1.08f); neckline.QuadTo(0, fh * 1.42f, fw * 0.34f, fh * 1.08f); canvas.DrawPath(neckline, stroke); }
         // Cream dupatta draped over her left shoulder, across the chest.
         fill.Color = dupatta;

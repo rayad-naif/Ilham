@@ -38,6 +38,18 @@ public class AvatarRenderTests
     }
 
     [Fact]
+    public void Outfits_ChangeTheRender_AndByNameResolves()
+    {
+        var s = new AvatarState(); s.SetMood("happy");
+        for (int i = 0; i < 120; i++) s.Step(0.016);
+        byte[] Render(Outfit fit) { using var b = new SKBitmap(300, 300); using (var c = new SKCanvas(b)) AvatarRenderer.Draw(c, 300, s, new SKColor(20, 18, 33), fit); using var img = SKImage.FromBitmap(b); return img.Encode(SKEncodedImageFormat.Png, 90).ToArray(); }
+        Assert.Equal(8, Outfits.All.Count);
+        Assert.NotEqual(Convert.ToBase64String(Render(Outfits.Mustard)), Convert.ToBase64String(Render(Outfits.Emerald)));
+        Assert.Equal("Royal blue", Outfits.ByName("royal blue").Name);
+        Assert.Equal(Outfits.Mustard, Outfits.ByName("does-not-exist")); // safe fallback
+    }
+
+    [Fact]
     public void State_EasesTowardMood_AndBlinks()
     {
         var s = new AvatarState();
