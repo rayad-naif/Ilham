@@ -44,6 +44,13 @@ public sealed record UserProfile
 
     /// <summary>Whether she talks on her own (check-ins, teasing, nagging, demands) when you go quiet.</summary>
     public bool Proactive { get; init; } = true;
+
+    /// <summary>
+    /// Privacy lock (opt-in): when the webcam doesn't recognise you, Ilham hides herself — like Face ID. It
+    /// only decides owner-vs-not and never identifies or records whoever else is there. Requires enrolling
+    /// your own face.
+    /// </summary>
+    public bool HideWhenNotOwner { get; init; }
 }
 
 /// <summary>Loads/saves the profile and the override password (PBKDF2-hashed, never stored in plain text).</summary>

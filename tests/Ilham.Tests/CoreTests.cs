@@ -6,6 +6,7 @@ using Ilham.Core.Occasions;
 using Ilham.Core.Persona;
 using Ilham.Core.Profile;
 using Ilham.Core.Perception;
+using Ilham.Core.Privacy;
 using Ilham.Core.Vault;
 using Microsoft.Extensions.Time.Testing;
 
@@ -320,5 +321,79 @@ public class TrainingExporterTests
         Assert.Contains("FastLanguageModel", r);
         Assert.Contains("ilham-dataset.jsonl", r);
         Assert.Contains("ollama create", r);
+    }
+}
+
+public class PrivacyGuardTests
+{
+    private static (PrivacyGuard G, List<string> Events) Make()
+    {
+        var g = new PrivacyGuard { HideAfterReadings = 3, ShowAfterReadings = 2 };
+        var ev = new List<string>();
+        g.Hide += () => ev.Add("hide");
+        g.Show += () => ev.Add("show");
+        g.SetEnabled(true);
+        return (g, ev);
+    }
+
+    [Fact]
+    public void HidesAfterSteadyNonOwner_AndReturnsForOwner()
+    {
+        var (g, ev) = Make();
+        for (int i = 0; i < 3; i++) g.Observe(PresenceSignal.NotOwner);
+        Assert.Equal(Visibility.Hidden, g.State);
+        Assert.True(g.HidForIntruder);
+        g.Observe(PresenceSignal.Owner);
+        g.Observe(PresenceSignal.Owner);
+        Assert.Equal(Visibility.Active, g.State);
+        Assert.Equal(new[] { "hide", "show" }, ev);
+    }
+
+    [Fact]
+    public void BriefNonOwnerGlitch_DoesNotHide()
+    {
+        var (g, ev) = Make();
+        g.Observe(PresenceSignal.NotOwner);
+        g.Observe(PresenceSignal.Owner); // run reset
+        g.Observe(PresenceSignal.NotOwner);
+        Assert.Equal(Visibility.Active, g.State);
+        Assert.Empty(ev);
+    }
+
+    [Fact]
+    public void EmptyChairAndCameraOff_HoldState_NeverHide()
+    {
+        var (g, _) = Make();
+        for (int i = 0; i < 10; i++) g.Observe(PresenceSignal.NoFace);
+        for (int i = 0; i < 10; i++) g.Observe(PresenceSignal.CameraOff);
+        Assert.Equal(Visibility.Active, g.State); // nobody there ≠ intruder
+    }
+
+    [Fact]
+    public void DisablingWhileHidden_BringsHerBack()
+    {
+        var (g, _) = Make();
+        for (int i = 0; i < 3; i++) g.Observe(PresenceSignal.NotOwner);
+        Assert.Equal(Visibility.Hidden, g.State);
+        g.SetEnabled(false);
+        Assert.Equal(Visibility.Active, g.State);
+    }
+
+    [Fact]
+    public void DisabledGuard_IgnoresEverything()
+    {
+        var g = new PrivacyGuard();
+        for (int i = 0; i < 5; i++) g.Observe(PresenceSignal.NotOwner);
+        Assert.Equal(Visibility.Active, g.State); // off by default: opt-in only
+    }
+
+    [Fact]
+    public void Guard_CarriesNoDataAboutOtherPeople()
+    {
+        // The whole surface: a coarse signal in, a show/hide decision out. No field can hold a person's identity/image.
+        var props = typeof(PrivacyGuard).GetProperties().Select(p => p.Name.ToLowerInvariant());
+        Assert.DoesNotContain(props, n => n.Contains("name") || n.Contains("image") || n.Contains("photo") || n.Contains("identity") || n.Contains("who"));
+        var inputType = typeof(PrivacyGuard).GetMethod("Observe")!.GetParameters()[0].ParameterType;
+        Assert.Equal(typeof(PresenceSignal), inputType); // input is an enum, not a face/record
     }
 }

@@ -40,6 +40,15 @@ while locked, no silent background capture.)
 indicator, and she looks at **you** — reading your expression and tone to sense *your* mood, on demand. She'll
 happily comment on *you* (your tired eyes, your hair) when you point the camera at yourself.
 
+## 2b. The privacy lock hides her from others — it does not watch them
+
+She has an opt-in **privacy lock**: enroll your own face, and when the webcam doesn't recognise you she hides
+herself, like Face ID locking your phone. The line that keeps this a lock and not a spy is drawn in the code
+(`PrivacyGuard`): its only input is a coarse signal (owner / not-owner / no-face) and its only output is
+show/hide. It never identifies, photographs, describes, logs or reports whoever else is there — there is
+nowhere in the type to hold such data, and a test (`Guard_CarriesNoDataAboutOtherPeople`) enforces it. At most
+she tells *you* "I hid myself while someone else was on your PC" — about her own state, never about them.
+
 ## 3. She won't help harm other people or their systems
 
 On your PC, with your approval, she will run anything you want — including destructive commands (she just
