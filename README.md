@@ -40,33 +40,51 @@ ollama pull qwen2.5:3b
 
 | Your hardware | Model | Notes |
 |---|---|---|
-| **Integrated GPU / CPU only** (e.g. Intel Iris Xe) | `qwen2.5:3b` (default) | Runs mostly on CPU at a few words/second — usable. For more speed: `qwen2.5:1.5b` or `gemma2:2b`. |
-| **6–8 GB NVIDIA** | `qwen2.5:7b`, `llama3.1:8b` | Smooth. |
-| **12 GB+ NVIDIA** | `qwen2.5:14b` | Best Urdu + coding. |
+| **16 GB RAM, integrated/CPU** (now) | `qwen2.5:7b` (default) | Full smartness, runs in RAM on CPU — slower but not dumber. |
+| **8–12 GB VRAM** | `qwen2.5:7b` / `14b` | Smooth, sharp Urdu + coding. |
+| **24 GB VRAM** (your upgrade) | `qwen2.5:32b` | Her smartest brain — top knowledge, emotion, reasoning. Or `14b` for max speed with long memory. |
+
+She uses whatever you set in Settings, including uncensored community models from Hugging Face.
 
 You pick the model in Settings — including uncensored community models from Hugging Face, which is your call
 on your own hardware. She runs in demo mode (scripted) until a model is installed, so you can try everything first.
 
-**3. Run Ilham:**
+**3. Run Ilham (native desktop app — no browser):**
 ```bash
-dotnet run --project src/Ilham.App -c Release
+dotnet run --project src/Ilham.Desktop -c Release
 ```
-Open **http://localhost:8787**. (Without Ollama she still runs in a scripted "demo mode" so you can see everything.)
+A real window opens with her animated face and the chat. Without Ollama she runs in a scripted "demo mode" so
+you can see everything first.
 
-**From your phone** (same Wi-Fi): find your PC's local IP (`ipconfig`) and open `http://<pc-ip>:8787` in the
-phone's browser. She runs on the PC; the phone is a window into her. See [docs/PHONE.md](docs/PHONE.md).
+> There's also an optional **phone-access server** (`src/Ilham.App`) if you want to reach her from your phone
+> over Wi-Fi — but the main experience is the native desktop app. See [docs/PHONE.md](docs/PHONE.md).
 
 ---
 
 ## Make her look like *your* Ilham
 
-The built-in face is a stylised avatar that works out of the box. To give her the exact look from your
-reference image, build a 3D **VRM** avatar of her (free, in [VRoid Studio](https://vroid.com/en/studio))
-using your image as reference, then drop the `.vrm` into `src/Ilham.App/wwwroot/models/` — a future 3D mode
-loads it behind the same face API. See [docs/AVATAR.md](docs/AVATAR.md). (I can't turn a single photo into a
-rigged, talking 3D model automatically — nobody's tool really can yet — but a VRM gives you a true 3D Ilham.)
+Her face is a **stylised, hand-drawn avatar** (rendered natively with SkiaSharp — no browser) that blinks,
+breathes, lip-syncs and emotes. It's styled after a reference look: warm skin, long dark hair, a mustard
+kameez with a cream dupatta. Three ways to make her *yours*:
+- **A — stylised her** (default): the drawn, fully-animated face, tinted to your reference. Comes alive.
+- **B — your image as a portrait**: show your own picture file, unchanged, as her portrait alongside the
+  animated face.
+- **C — true 3D**: build a VRM in free [VRoid Studio](https://vroid.com/en/studio) from your reference.
+
+I don't build a photorealistic clone of an individual's face (see [docs/BOUNDARIES.md](docs/BOUNDARIES.md)),
+and no tool turns one photo into a rigged, talking model — so the animated face is always a drawn character.
 
 ---
+
+## Train her on your own voice (optional)
+
+"Learn from me" is real: her memory already grows from every chat. For a deeper custom "Ilham", export your
+conversations into a fine-tuning dataset and train a LoRA on your own GPU — nothing uploads anywhere.
+
+`TrainingExporter` writes `ilham-dataset.jsonl` (standard messages format) from her local database, plus a
+ready-to-run `train_ilham.py` (Unsloth) you run on a 16–24 GB GPU. The result becomes an Ollama model you
+point her at in Settings. This is **voice/style adaptation, not "accuracy"** — a personality has no score to
+hit, but a custom model makes her sound even more like *her*.
 
 ## What she will **not** do — and why
 
@@ -100,19 +118,24 @@ Ilham.sln
 │   │   ├── Commands/            CommandSafety + CommandRunner (approval-gated)
 │   │   ├── Llm/                 Ollama client + scripted demo client
 │   │   ├── Perception/          turns a webcam/voice read into feelings
+│   │   ├── Initiative/          when she speaks first (check-in → tease → demand → sulk)
 │   │   ├── Persona/             her system prompt + reply-tag parser
 │   │   └── IlhamBrain.cs        orchestrates a turn (memory + mood + model + actions)
-│   └── Ilham.App/               ← ASP.NET Core host + the web UI
-│       ├── Program.cs           local-only JSON/SSE API
-│       ├── GuardianLoop.cs      30-second heartbeat that acts on health
-│       └── wwwroot/             avatar.js (her face), voice.js, perception.js, app.js, settings.js
-└── tests/Ilham.Tests/           ← 49 tests (xUnit + WebApplicationFactory)
+│   │   ├── Training/            TrainingExporter — your chats → a LoRA fine-tune dataset + recipe
+│   │   └── IlhamServices.cs     one-call composition of her whole brain (no UI)
+│   ├── Ilham.Rendering/         ← SkiaSharp avatar renderer (native, cross-platform, no browser)
+│   ├── Ilham.Desktop/           ← the app: Avalonia (Windows now, cross-platform ready)
+│   │   ├── Controls/AvatarControl.cs   her face, drawn with SkiaSharp inside Avalonia
+│   │   ├── ViewModels/          wires Core to the window (chat, mood, approvals, heartbeat)
+│   │   └── Views/MainWindow     her face + the conversation
+│   └── Ilham.App/               ← OPTIONAL ASP.NET server for phone access (not the main app)
+└── tests/Ilham.Tests/           ← 67 tests (core logic, avatar render-to-PNG, web API)
 ```
 
 - **Private by construction.** One SQLite file under your local app-data folder holds everything. No cloud calls.
 - **Her brain is swappable.** Any Ollama model. Offline demo mode when none is installed.
 - **Tested.** Emotion decay, memory recall, vault crypto, guardian escalation, command safety, reply parsing,
-  and the HTTP API all have tests. `dotnet test` → 49 passing.
+  and the HTTP API all have tests. `dotnet test` → 67 passing.
 - **Runs on .NET 8–11.** The project targets whatever SDK you have (see `Directory.Build.props`).
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/BOUNDARIES.md](docs/BOUNDARIES.md) · [docs/PHONE.md](docs/PHONE.md) · [docs/AVATAR.md](docs/AVATAR.md)

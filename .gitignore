@@ -488,3 +488,6 @@ $RECYCLE.BIN/
 *.db-wal
 *.db-shm
 src/Ilham.App/wwwroot/models/*.vrm
+ilham-dataset.jsonl
+ilham-lora/
+ilham-gguf/

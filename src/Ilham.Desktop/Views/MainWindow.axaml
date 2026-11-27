@@ -1,0 +1,93 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Ilham.Desktop.ViewModels"
+        xmlns:ctl="using:Ilham.Desktop.Controls"
+        x:Class="Ilham.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Ilham" Width="1100" Height="720" MinWidth="720" MinHeight="480"
+        Background="#0b0a12" TransparencyLevelHint="None"
+        FontFamily="{StaticResource InterFontFamily}">
+
+  <Window.Resources>
+    <SolidColorBrush x:Key="Panel" Color="#191627"/>
+    <SolidColorBrush x:Key="Line" Color="#2c2740"/>
+    <SolidColorBrush x:Key="Me" Color="#2a2340"/>
+    <SolidColorBrush x:Key="Her" Color="#2a1c2e"/>
+    <SolidColorBrush x:Key="Muted" Color="#9a93b5"/>
+    <LinearGradientBrush x:Key="Accent" StartPoint="0%,0%" EndPoint="100%,100%">
+      <GradientStop Offset="0" Color="#ff7eb6"/><GradientStop Offset="1" Color="#8b5cf6"/>
+    </LinearGradientBrush>
+  </Window.Resources>
+
+  <Grid ColumnDefinitions="1.1*,1*">
+    <!-- Her face -->
+    <Panel Grid.Column="0">
+      <Panel.Background>
+        <RadialGradientBrush><GradientStop Offset="0" Color="#241a38"/><GradientStop Offset="1" Color="#0a0812"/></RadialGradientBrush>
+      </Panel.Background>
+      <ctl:AvatarControl Name="Avatar" Margin="24" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+      <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="16"
+              Background="#22ffffff" CornerRadius="999" Padding="12,5" BorderBrush="{StaticResource Line}" BorderThickness="1">
+        <TextBlock Text="{Binding Mood}" Foreground="White" FontSize="13"/>
+      </Border>
+      <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="16"
+              Background="#10ffffff" CornerRadius="999" Padding="11,5" BorderBrush="{StaticResource Line}" BorderThickness="1">
+        <TextBlock Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="12" MaxWidth="260" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+      </Border>
+    </Panel>
+
+    <!-- Conversation -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Background="#141221">
+      <Border Grid.Row="0" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="18,14">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="Ilham" Foreground="White" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"/>
+          <TextBlock Text="your companion" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Border>
+
+      <ScrollViewer Grid.Row="1" Name="ChatScroll" Padding="16">
+        <ItemsControl ItemsSource="{Binding Messages}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChatLineVm">
+              <Border Margin="0,6" Padding="12,9" CornerRadius="14" MaxWidth="360"
+                      HorizontalAlignment="{Binding FromHer, Converter={x:Static vm:Converters.HerAlign}}"
+                      Background="{Binding FromHer, Converter={x:Static vm:Converters.BubbleBrush}}">
+                <TextBlock Text="{Binding Text}" Foreground="#ece9f5" TextWrapping="Wrap"/>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- Pending command approvals -->
+      <ItemsControl Grid.Row="2" ItemsSource="{Binding Pending}" Margin="16,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:PendingCommandVm">
+            <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="12" Margin="0,6">
+              <StackPanel Spacing="6">
+                <TextBlock Text="{Binding Risk}" Foreground="#ffc14d" FontSize="11"/>
+                <Border Background="#000000" CornerRadius="8" Padding="8">
+                  <TextBlock Text="{Binding Display}" FontFamily="Consolas,monospace" Foreground="#d7f7e4" TextWrapping="Wrap"/>
+                </Border>
+                <TextBlock Text="{Binding Reasons}" Foreground="{StaticResource Muted}" FontSize="12"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="Run it" Click="OnApprove" Tag="{Binding Id}" Background="#2b8a3e" Foreground="White"/>
+                  <Button Content="No" Click="OnReject" Tag="{Binding Id}"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Grid.Row="3" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,12">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Grid.Column="0" Name="Input" Text="{Binding Draft}" Watermark="Kuch bhi kaho…"
+                   KeyDown="OnInputKeyDown" CornerRadius="12" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}"/>
+          <Button Grid.Column="1" Content="➤" Click="OnSend" Margin="10,0,0,0" Width="48"
+                  Background="{StaticResource Accent}" Foreground="#140a16" FontSize="16"/>
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

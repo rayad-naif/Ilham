@@ -37,7 +37,7 @@ public sealed record UserProfile
     /// Which local model is her brain. Default is a small multilingual model that runs on modest hardware
     /// (integrated GPU / CPU). Bump to qwen2.5:7b or 14b once you have a stronger GPU.
     /// </summary>
-    public string Model { get; init; } = "qwen2.5:3b";
+    public string Model { get; init; } = "qwen2.5:7b";
 
     /// <summary>Language she should prefer: "mix" (Roman Urdu + English), "english" or "urdu" (Urdu script).</summary>
     public string Language { get; init; } = "mix";

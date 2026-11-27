@@ -281,3 +281,44 @@ public class PerceptionTests
         Assert.Contains(PerceptionInterpreter.ToFeelings(r), f => f.Mood == Mood.Worried);
     }
 }
+
+public class TrainingExporterTests
+{
+    [Fact]
+    public void Export_ProducesValidJsonlWithPersonaAndTurns()
+    {
+        using var m = new MemoryStore(":memory:");
+        m.AddFact("He loves nihari");
+        m.AddMessage("user", "salaam Ilham");
+        m.AddMessage("assistant", "walaikum salaam jaan, kaise ho?", "happy");
+        m.AddMessage("user", "theek hoon");
+        m.AddMessage("assistant", "acha sun, paani piya? 😤", "annoyed");
+
+        string jsonl = Ilham.Core.Training.TrainingExporter.BuildJsonl(m, new UserProfile { Name = "Rayad" });
+        var lines = jsonl.TrimEnd('\n').Split('\n');
+        Assert.Equal(2, lines.Length); // one example per assistant reply with prior user context
+
+        using var doc = System.Text.Json.JsonDocument.Parse(lines[0]);
+        var msgs = doc.RootElement.GetProperty("messages").EnumerateArray().ToList();
+        Assert.Equal("system", msgs[0].GetProperty("role").GetString());
+        Assert.Contains("Rayad", msgs[0].GetProperty("content").GetString());
+        Assert.Contains("nihari", msgs[0].GetProperty("content").GetString()); // facts folded into persona
+        Assert.Contains(msgs, x => x.GetProperty("role").GetString() == "assistant");
+    }
+
+    [Fact]
+    public void Export_EmptyHistory_IsEmptyNotCrash()
+    {
+        using var m = new MemoryStore(":memory:");
+        Assert.Equal("", Ilham.Core.Training.TrainingExporter.BuildJsonl(m, new UserProfile()));
+    }
+
+    [Fact]
+    public void Recipe_IsRunnablePython_ReferencingTheDataset()
+    {
+        string r = Ilham.Core.Training.TrainingExporter.TrainingRecipe(datasetFile: "ilham-dataset.jsonl");
+        Assert.Contains("FastLanguageModel", r);
+        Assert.Contains("ilham-dataset.jsonl", r);
+        Assert.Contains("ollama create", r);
+    }
+}
