@@ -465,9 +465,11 @@ public class ConsoleProcessorTests
         var c = Make(out var mem);
         Assert.Contains("Set name", await c.RunAsync("/set name Rayad"));
         Assert.Contains("qwen2.5:32b", await c.RunAsync("/set model qwen2.5:32b"));
+        await c.RunAsync("/set ollamaurl http://100.64.0.2:11434/");
         var profile = new ProfileStore(mem).Load();
         Assert.Equal("Rayad", profile.Name);
         Assert.Equal("qwen2.5:32b", profile.Model);
+        Assert.Equal("http://100.64.0.2:11434", profile.OllamaUrl); // trailing slash trimmed
         Assert.Contains("name: Rayad", await c.RunAsync("/profile"));
     }
 
