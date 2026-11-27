@@ -25,7 +25,16 @@
       <Panel.Background>
         <RadialGradientBrush><GradientStop Offset="0" Color="#241a38"/><GradientStop Offset="1" Color="#0a0812"/></RadialGradientBrush>
       </Panel.Background>
-      <ctl:AvatarControl Name="Avatar" Margin="24" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+      <ctl:AvatarControl Name="Avatar" Margin="24" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                         IsVisible="{Binding ShowFace}"/>
+      <!-- Realistic portrait (shown only if you provided one at %LocalAppData%/Ilham/portrait.*). -->
+      <Image Name="Portrait" Margin="24" Source="{Binding Portrait}" Stretch="Uniform"
+             IsVisible="{Binding ShowPortrait}"/>
+      <!-- Toggle between the realistic portrait and the animated face. -->
+      <Button Name="FaceToggle" Content="🎭" Click="OnToggleFace" ToolTip.Tip="Switch between the realistic portrait and the animated face"
+              VerticalAlignment="Top" HorizontalAlignment="Right" Margin="16"
+              Background="#22ffffff" BorderBrush="{StaticResource Line}" CornerRadius="999" Padding="9,5"
+              IsVisible="{Binding HasPortrait}"/>
       <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="16"
               Background="#22ffffff" CornerRadius="999" Padding="12,5" BorderBrush="{StaticResource Line}" BorderThickness="1">
         <TextBlock Text="{Binding Mood}" Foreground="White" FontSize="13"/>

@@ -55,6 +55,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _svc = new IlhamServices(dataDir, _http);
         Profile = _svc.Profiles.Load();
 
+        // If you drop a realistic portrait at %LocalAppData%/Ilham/portrait.(png|jpg|jpeg|webp), she wears
+        // that real face; otherwise the drawn avatar is used. Her picture, shown unchanged.
+        foreach (var ext in new[] { "png", "jpg", "jpeg", "webp" })
+        {
+            string pf = Path.Combine(dataDir, "portrait." + ext);
+            if (File.Exists(pf)) { try { Portrait = new Avalonia.Media.Imaging.Bitmap(pf); } catch { } break; }
+        }
+        _showPortrait = Portrait is not null;
+
         // Heartbeat: guardian tick (acts on health) + her own initiative, every few seconds.
         _heartbeat = new DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
         _heartbeat.Tick += async (_, _) => await HeartbeatAsync();
@@ -70,6 +79,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>User settings.</summary>
     public UserProfile Profile { get; private set; }
+
+    /// <summary>A realistic portrait of her, if you provided one (else null → the drawn avatar is used).</summary>
+    public Avalonia.Media.Imaging.Bitmap? Portrait { get; }
+
+    /// <summary>True when a portrait image is available to show.</summary>
+    public bool HasPortrait => Portrait is not null;
+
+    private bool _showPortrait;
+    /// <summary>Whether to show the realistic portrait (true) or the animated drawn face (false).</summary>
+    public bool ShowPortrait { get => _showPortrait; set { _showPortrait = value; Raise(); Raise(nameof(ShowFace)); } }
+
+    /// <summary>The inverse of <see cref="ShowPortrait"/> — the animated face is shown when the portrait isn't.</summary>
+    public bool ShowFace => !_showPortrait;
+
+    /// <summary>Flips between the realistic portrait and the animated face.</summary>
+    public void ToggleFace() { if (HasPortrait) ShowPortrait = !ShowPortrait; }
 
     private string _mood = "neutral";
     /// <summary>Her current mood name (the avatar binds to this).</summary>

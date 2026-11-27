@@ -43,5 +43,7 @@ public partial class MainWindow : Window
         if (sender is Control { Tag: string id } && Vm is { } vm) vm.Reject(id);
     }
 
+    private void OnToggleFace(object? sender, RoutedEventArgs e) => Vm?.ToggleFace();
+
     private void ScrollToEnd() => this.FindControl<ScrollViewer>("ChatScroll")?.ScrollToEnd();
 }

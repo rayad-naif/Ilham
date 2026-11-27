@@ -6,6 +6,21 @@ A stylised, fully animated 2D avatar (`wwwroot/avatar.js`) that blinks, breathes
 lip-syncs to her speech, and shows nine moods. It needs no model file and runs offline. It's driven by two
 methods: `setMood(name)` and `setAmplitude(0..1)`.
 
+## Option: use a realistic portrait (the quickest realistic look)
+
+The drawn avatar is an illustration and can't be made photorealistic (it's vector art). For a **realistic**
+face, give her a realistic image — any AI-generated or photographed portrait you have the right to use:
+
+1. Save it as **`portrait.png`** (or `.jpg`, `.jpeg`, `.webp`) in her data folder:
+   `%LocalAppData%\Ilham\portrait.png` on Windows.
+2. Start the app. She now shows that realistic face. A 🎭 button (top-right of her panel) flips between the
+   realistic portrait and the animated drawn face.
+
+Trade-off to know: a portrait image is **static** — it's a real, realistic face, but it doesn't lip-sync or
+change expression. The drawn face animates (blinks, talks, emotes) but is stylised. The toggle lets you use
+whichever you want in the moment. For *realistic **and** animated*, you need one of the 3D routes below (or a
+talking-portrait model), because that's the only way to drive a realistic face with expressions.
+
 ## Making her look like your reference image (a true 3D Ilham)
 
 I can't turn a single photo into a rigged, talking 3D model automatically — no tool really does that well yet;
