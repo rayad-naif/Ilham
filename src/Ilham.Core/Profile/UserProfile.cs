@@ -34,6 +34,13 @@ public sealed record UserProfile
     public string OllamaUrl { get; init; } = "http://127.0.0.1:11434";
 
     /// <summary>
+    /// Optional neural-voice endpoint (a natural Urdu/English voice). When set, she speaks via this
+    /// <c>/tts</c> service (e.g. the edge-tts server on your cloud GPU box); when empty she falls back to the
+    /// built-in Windows voice. Set with <c>/set ttsurl &lt;url&gt;</c> in the console.
+    /// </summary>
+    public string TtsUrl { get; init; } = "";
+
+    /// <summary>
     /// Which local model is her brain. Default is a small multilingual model that runs on modest hardware
     /// (integrated GPU / CPU). Bump to qwen2.5:7b or 14b once you have a stronger GPU.
     /// </summary>

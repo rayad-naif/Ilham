@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using NAudio.Wave; // ToSampleProvider() / Init(ISampleProvider) extension methods live here
 
 namespace Ilham.Desktop.Services;
 
@@ -29,8 +30,13 @@ public interface IVoice
 /// <summary>Picks the right voice for this OS.</summary>
 public static class Voice
 {
-    /// <summary>Windows → real speech via the built-in engine; other OSes → silent (so it still runs).</summary>
-    public static IVoice Create() => OperatingSystem.IsWindows() ? new WindowsVoice() : new NullVoice();
+    /// <summary>
+    /// Windows → a natural neural voice when a <c>/tts</c> URL is configured (falling back to the built-in
+    /// Windows voice otherwise); other OSes → silent (so it still runs).
+    /// </summary>
+    /// <param name="ttsUrl">Reads the current cloud TTS endpoint (empty = use the built-in voice).</param>
+    public static IVoice Create(Func<string>? ttsUrl = null) =>
+        OperatingSystem.IsWindows() ? new CloudEdgeVoice(ttsUrl ?? (() => "")) : new NullVoice();
 }
 
 /// <summary>No-op voice for non-Windows dev/CI — everything else keeps working, she just doesn't talk.</summary>
@@ -143,4 +149,142 @@ public sealed class WindowsVoice : IVoice
 
     // Single-quote escaping for a PowerShell single-quoted string, with newlines flattened.
     private static string Escape(string s) => s.Replace("'", "''").Replace("\r", " ").Replace("\n", " ");
+}
+
+/// <summary>
+/// A natural neural voice. When a <c>/tts</c> endpoint is configured (e.g. the edge-tts server running on the
+/// cloud GPU box), she speaks with a real Urdu/English neural voice fetched as audio and played here, with
+/// lip-sync driven by the actual waveform. If no endpoint is set, or the request fails (offline), she falls
+/// back to the built-in Windows voice so she's never mute. Listening (STT) always uses the Windows engine.
+/// </summary>
+public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
+{
+    private readonly WindowsVoice _fallback = new();
+    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private readonly object _gate = new();
+    private NAudio.Wave.IWavePlayer? _player;
+    private IDisposable? _reader;
+    private CancellationTokenSource? _cts;
+
+    /// <inheritdoc />
+    public bool CanSpeak => OperatingSystem.IsWindows();
+    /// <inheritdoc />
+    public bool CanListen => _fallback.CanListen;
+
+    /// <inheritdoc />
+    public void Speak(string text, string language, string mood, Action<double> amplitude)
+    {
+        if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(text)) return;
+        string url = ttsUrl().Trim();
+        if (url.Length == 0) { _fallback.Speak(text, language, mood, amplitude); return; }
+
+        StopSpeaking();
+        var cts = new CancellationTokenSource();
+        lock (_gate) _cts = cts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                byte[] audio = await FetchAsync(url, text, VoiceFor(language), RateFor(mood), cts.Token);
+                if (cts.Token.IsCancellationRequested) return;
+                Play(audio, amplitude, cts.Token);
+            }
+            catch (OperationCanceledException) { amplitude(0); }
+            catch
+            {
+                // Cloud voice unreachable — don't leave her silent; use the built-in voice.
+                if (!cts.Token.IsCancellationRequested) _fallback.Speak(text, language, mood, amplitude);
+            }
+        }, cts.Token);
+    }
+
+    /// <inheritdoc />
+    public void StopSpeaking()
+    {
+        _fallback.StopSpeaking();
+        lock (_gate)
+        {
+            try { _cts?.Cancel(); } catch { }
+            try { _player?.Stop(); } catch { }
+            try { _player?.Dispose(); } catch { }
+            try { _reader?.Dispose(); } catch { }
+            _player = null; _reader = null; _cts = null;
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<string?> ListenOnceAsync(CancellationToken ct) => _fallback.ListenOnceAsync(ct);
+
+    private async Task<byte[]> FetchAsync(string url, string text, string voice, string rate, CancellationToken ct)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new { text, voice, rate });
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{url.TrimEnd('/')}/tts")
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Accept.ParseAdd("audio/wav");
+        using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
+        res.EnsureSuccessStatusCode();
+        return await res.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    // Plays audio (WAV or MP3) on this machine, pulsing the mouth from the live waveform's loudness.
+    private void Play(byte[] audio, Action<double> amplitude, CancellationToken ct)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var ms = new MemoryStream(audio);
+        bool isWav = audio.Length > 4 && audio[0] == 'R' && audio[1] == 'I' && audio[2] == 'F' && audio[3] == 'F';
+        NAudio.Wave.WaveStream wave = isWav ? new NAudio.Wave.WaveFileReader(ms) : new NAudio.Wave.Mp3FileReader(ms);
+        var amp = new AmplitudeSampleProvider(wave.ToSampleProvider(), amplitude);
+        var player = new NAudio.Wave.WaveOutEvent();
+        player.PlaybackStopped += (_, _) =>
+        {
+            amplitude(0);
+            try { wave.Dispose(); } catch { }
+            try { player.Dispose(); } catch { }
+        };
+        lock (_gate)
+        {
+            if (ct.IsCancellationRequested) { wave.Dispose(); player.Dispose(); amplitude(0); return; }
+            _reader = wave; _player = player;
+        }
+        player.Init(amp);
+        player.Play();
+    }
+
+    // "mix"/"urdu" → a real Pakistani Urdu female voice; "english" → a natural English female voice.
+    private static string VoiceFor(string language) =>
+        language?.ToLowerInvariant() == "english" ? "en-US-AriaNeural" : "ur-PK-UzmaNeural";
+
+    // Mood → speaking rate (edge-tts percentage), so she sounds lively or subdued to match her feeling.
+    private static string RateFor(string mood) => mood switch
+    {
+        "excited" => "+16%",
+        "happy" or "loving" => "+8%",
+        "teasing" or "angry" => "+6%",
+        "worried" => "-6%",
+        "sad" => "-12%",
+        _ => "+0%",
+    };
+}
+
+/// <summary>Wraps a sample stream and reports its running loudness (0..1) so the avatar's mouth tracks speech.</summary>
+internal sealed class AmplitudeSampleProvider(NAudio.Wave.ISampleProvider source, Action<double> amplitude)
+    : NAudio.Wave.ISampleProvider
+{
+    public NAudio.Wave.WaveFormat WaveFormat => source.WaveFormat;
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        int n = source.Read(buffer, offset, count);
+        if (n > 0)
+        {
+            double sum = 0;
+            for (int i = 0; i < n; i++) { float s = buffer[offset + i]; sum += s * s; }
+            double rms = Math.Sqrt(sum / n);             // 0..~1
+            double level = Math.Clamp(rms * 3.2, 0, 1);  // lift quiet speech into a visible mouth range
+            amplitude(0.12 + 0.78 * level);
+        }
+        return n;
+    }
 }
