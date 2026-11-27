@@ -137,7 +137,9 @@ public sealed class IlhamBrain(ILlmClient llm, MemoryStore memory, EmotionEngine
         foreach (var o in parsed.Occasions) memory.AddOccasion(o.Title, o.Month, o.Day, o.Year, o.Title.Contains("birthday", StringComparison.OrdinalIgnoreCase) ? "birthday" : "event");
         foreach (var c in parsed.Commands)
         {
-            var (risk, reasons) = CommandSafety.Classify(c.Command);
+            var (risk, reasons) = c.Shell == "gui"
+                ? (Risk.Caution, (IReadOnlyList<string>)["She wants to control your mouse/keyboard on this PC."])
+                : CommandSafety.Classify(c.Command);
             string cid = Guid.NewGuid().ToString("N")[..8];
             _pending[cid] = new ProposedCommand(cid, c.Shell, c.Command, risk, reasons);
         }
