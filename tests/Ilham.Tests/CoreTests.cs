@@ -397,3 +397,33 @@ public class PrivacyGuardTests
         Assert.Equal(typeof(PresenceSignal), inputType); // input is an enum, not a face/record
     }
 }
+
+public class OutfitWardrobeTests
+{
+    [Fact]
+    public void CoreWardrobeMatchesRenderingWardrobe()
+    {
+        // Core picks outfit names; Rendering draws them. They must stay identical.
+        var core = Ilham.Core.Outfits.OutfitWardrobe.Names.OrderBy(x => x);
+        var render = Ilham.Rendering.Outfits.All.Select(o => o.Name).OrderBy(x => x);
+        Assert.Equal(core, render);
+    }
+
+    [Fact]
+    public void ChooseForDay_IsStableAndDressyOnOccasions()
+    {
+        var day = new DateOnly(2026, 6, 1);
+        Assert.Equal(Ilham.Core.Outfits.OutfitWardrobe.ChooseForDay(day, Mood.Happy, false),
+                     Ilham.Core.Outfits.OutfitWardrobe.ChooseForDay(day, Mood.Happy, false)); // same day → same outfit
+        Assert.Contains(Ilham.Core.Outfits.OutfitWardrobe.ChooseForDay(day, Mood.Happy, occasionToday: true),
+                        Ilham.Core.Outfits.OutfitWardrobe.Festive);
+    }
+
+    [Fact]
+    public void OutfitTag_ParsedAndValidatedAgainstWardrobe()
+    {
+        var r = Ilham.Core.Persona.ReplyParser.Parse("Aaj maine maroon pehna. [mood:happy] [outfit: Maroon]");
+        Assert.Equal("Maroon", r.Outfit);
+        Assert.Null(Ilham.Core.Persona.ReplyParser.Parse("[outfit: spacesuit]").Outfit); // unknown → ignored
+    }
+}

@@ -141,6 +141,11 @@ public sealed class IlhamBrain(ILlmClient llm, MemoryStore memory, EmotionEngine
             string cid = Guid.NewGuid().ToString("N")[..8];
             _pending[cid] = new ProposedCommand(cid, c.Shell, c.Command, risk, reasons);
         }
+        if (parsed.Outfit is { } outfit) // she dressed herself: remember it
+        {
+            var store = new ProfileStore(memory);
+            store.Save(store.Load() with { Outfit = outfit });
+        }
     }
 
     private List<ChatMessage> BuildContext(string userText)

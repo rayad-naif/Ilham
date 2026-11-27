@@ -15,8 +15,9 @@ public sealed record OccasionRequest(string Title, int Month, int Day, int? Year
 /// <param name="Memories">Facts to save.</param>
 /// <param name="Occasions">Dates to save.</param>
 /// <param name="Commands">Commands awaiting your approval.</param>
+/// <param name="Outfit">An outfit she decided to change into this turn, or null.</param>
 public sealed record ParsedReply(string Text, Mood Mood, IReadOnlyList<string> Memories,
-    IReadOnlyList<OccasionRequest> Occasions, IReadOnlyList<CommandRequest> Commands);
+    IReadOnlyList<OccasionRequest> Occasions, IReadOnlyList<CommandRequest> Commands, string? Outfit = null);
 
 /// <summary>
 /// Extracts the action tags Ilham's prompt teaches her to use:
@@ -25,7 +26,7 @@ public sealed record ParsedReply(string Text, Mood Mood, IReadOnlyList<string> M
 /// </summary>
 public static partial class ReplyParser
 {
-    [GeneratedRegex(@"\[\s*(mood|remember|occasion|run)\s*:\s*((?:[^\[\]]|\[[^\[\]]*\])*)\]", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\[\s*(mood|remember|occasion|run|outfit)\s*:\s*((?:[^\[\]]|\[[^\[\]]*\])*)\]", RegexOptions.IgnoreCase)]
     private static partial Regex TagRegex();
 
     [GeneratedRegex(@"^(?:(\d{4})-)?(\d{1,2})-(\d{1,2})$")]
@@ -39,6 +40,7 @@ public static partial class ReplyParser
         var memories = new List<string>();
         var occasions = new List<OccasionRequest>();
         var commands = new List<CommandRequest>();
+        string? outfit = null;
 
         string text = TagRegex().Replace(raw, m =>
         {
@@ -67,13 +69,16 @@ public static partial class ReplyParser
                     if (sc.Length == 2 && sc[0].ToLowerInvariant() is "powershell" or "cmd" or "bash" && sc[1].Length > 0)
                         commands.Add(new CommandRequest(sc[0].ToLowerInvariant(), sc[1]));
                     break;
+                case "outfit" when body.Length > 0:
+                    outfit = Outfits.OutfitWardrobe.Canonical(body); // only accept a real outfit name
+                    break;
             }
             return "";
         });
 
         text = Regex.Replace(text, @"[ \t]{2,}", " ");
         text = Regex.Replace(text, @"\n{3,}", "\n\n").Trim();
-        return new ParsedReply(text, mood, memories, occasions, commands);
+        return new ParsedReply(text, mood, memories, occasions, commands, outfit);
     }
 
     /// <summary>
@@ -84,7 +89,7 @@ public static partial class ReplyParser
     {
         string text = TagRegex().Replace(partial, "");
         int open = text.LastIndexOf('[');
-        if (open >= 0 && text.IndexOf(']', open) < 0 && Regex.IsMatch(text[open..], @"^\[\s*(m|mo|moo|mood|r|re|rem|reme|remem|rememb|remembe|remember|o|oc|occ|occa|occas|occasi|occasio|occasion|ru|run)?\s*(:.*)?$", RegexOptions.IgnoreCase | RegexOptions.Singleline))
+        if (open >= 0 && text.IndexOf(']', open) < 0 && Regex.IsMatch(text[open..], @"^\[\s*(m|mo|moo|mood|r|re|rem|reme|remem|rememb|remembe|remember|o|oc|occ|occa|occas|occasi|occasio|occasion|ou|out|outf|outfi|outfit|ru|run)?\s*(:.*)?$", RegexOptions.IgnoreCase | RegexOptions.Singleline))
             text = text[..open];
         return Regex.Replace(text, @"[ \t]{2,}", " ").Trim();
     }

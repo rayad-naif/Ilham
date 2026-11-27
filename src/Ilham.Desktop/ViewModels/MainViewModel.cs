@@ -87,6 +87,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string>? MoodChanged;
     /// <summary>Raised with live speech amplitude for lip-sync (wired to TTS by the view).</summary>
     public event Action<double>? Amplitude;
+    /// <summary>Raised when she changes outfit, so the window applies it to the avatar.</summary>
+    public event Action<string>? OutfitChanged;
+
+    private void WearOutfit(string outfit, bool persist)
+    {
+        if (!Ilham.Core.Outfits.OutfitWardrobe.IsKnown(outfit)) return;
+        Profile = Profile with { Outfit = outfit };
+        if (persist) _svc.Profiles.Save(Profile);
+        OutfitChanged?.Invoke(outfit);
+    }
 
     /// <summary>Sends the current draft to Ilham.</summary>
     public async Task SendAsync()
@@ -101,6 +111,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private async Task GreetAsync()
     {
         await RefreshStatusAsync();
+        // She dresses herself for the day (festive if there's an occasion today).
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        bool occasionToday = Ilham.Core.Occasions.OccasionCalendar
+            .Upcoming(Profile, _svc.Memory.Occasions(), today).Any(o => o.DaysAway == 0);
+        string dayOutfit = Ilham.Core.Outfits.OutfitWardrobe.ChooseForDay(today, Ilham.Core.Emotions.Mood.Happy, occasionToday);
+        WearOutfit(dayOutfit, persist: true);
+
         string hi = Profile.Name is { Length: > 0 } n ? $"Aa gaye {n}? Main wait kar rahi thi. 💜" : "Hey. Main yahin hoon.";
         Messages.Add(new ChatLineVm(true, hi));
         SetMood("happy");
@@ -178,9 +195,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 bubble.Text += c.TextDelta;
             }
             if (c.Done && c.Final is { } f)
+            {
+                if (f.Outfit is { } outfit) WearOutfit(outfit, persist: false); // she already saved it; just show it
                 foreach (var cmd in _svc.Brain.Pending)
                     if (Pending.All(p => p.Id != cmd.Id))
                         Pending.Add(new PendingCommandVm(cmd.Id, cmd.Shell, cmd.Command, cmd.Risk.ToString().ToLowerInvariant(), string.Join(" · ", cmd.Reasons)));
+            }
         }
     }
 

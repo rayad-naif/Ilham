@@ -21,6 +21,7 @@ public partial class MainWindow : Window
                 avatar?.SetOutfit(vm.Profile.Outfit);
                 vm.MoodChanged += mood => avatar?.SetMood(mood);
                 vm.Amplitude += amp => avatar?.SetAmplitude(amp);
+                vm.OutfitChanged += outfit => avatar?.SetOutfit(outfit);
                 vm.Messages.CollectionChanged += (_, _) => ScrollToEnd();
             }
         };
