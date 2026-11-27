@@ -35,8 +35,7 @@ public sealed class OllamaClient(HttpClient http, Func<(string Url, string Model
             model,
             messages,
             stream = true,
-            keep_alive = "8h", // stay resident through a work session (esp. a cloud GPU) — no slow reloads
-
+            keep_alive = "30m",
             options = new { temperature = 0.8, top_p = 0.9, num_ctx = 8192, repeat_penalty = 1.08 },
         };
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{url.TrimEnd('/')}/api/chat") { Content = JsonContent.Create(body) };
