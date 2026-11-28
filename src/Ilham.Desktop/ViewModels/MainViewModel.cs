@@ -29,6 +29,10 @@ public sealed class PendingCommandVm(string id, string shell, string command, st
 {
     /// <summary>Approval id.</summary>
     public string Id { get; } = id;
+    /// <summary>Which executor: "powershell"/"cmd"/"bash", or "gui" for mouse/keyboard control.</summary>
+    public string Shell { get; } = shell;
+    /// <summary>The command or GUI action text.</summary>
+    public string Command { get; } = command;
     /// <summary>Shell + command, for display.</summary>
     public string Display { get; } = $"{shell} › {command}";
     /// <summary>Risk label.</summary>
@@ -49,6 +53,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly Ilham.Core.Console.ConsoleProcessor _console;
     private readonly SemaphoreSlim _turn = new(1, 1); // one speaker at a time; your messages are never dropped
     private readonly Services.IVoice _voice;
+    private readonly Services.IComputer _computer = Services.Computer.Create();
     private CancellationTokenSource? _listenCts;
 
     /// <summary>Builds the view model and its services under <paramref name="dataDir"/>.</summary>
@@ -264,6 +269,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         var vm = Pending.FirstOrDefault(p => p.Id == id);
         if (vm is not null) Pending.Remove(vm);
+
+        // GUI control (mouse/keyboard) runs here on the desktop, not through the Core command runner.
+        if (vm is { Shell: "gui" })
+        {
+            _svc.Brain.Reject(id); // drop it from her pending queue
+            string result = await _computer.ExecuteAsync(vm.Command);
+            Add(true).Text = result;
+            return;
+        }
+
         await _turn.WaitAsync();
         try
         {

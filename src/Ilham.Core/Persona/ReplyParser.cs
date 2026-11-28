@@ -66,7 +66,8 @@ public static partial class ReplyParser
                     break;
                 case "run":
                     var sc = body.Split(':', 2, StringSplitOptions.TrimEntries);
-                    if (sc.Length == 2 && sc[0].ToLowerInvariant() is "powershell" or "cmd" or "bash" && sc[1].Length > 0)
+                    // "gui" is mouse/keyboard control (she actually clicks/types); the rest are shells.
+                    if (sc.Length == 2 && sc[0].ToLowerInvariant() is "powershell" or "cmd" or "bash" or "gui" && sc[1].Length > 0)
                         commands.Add(new CommandRequest(sc[0].ToLowerInvariant(), sc[1]));
                     break;
                 case "outfit" when body.Length > 0:

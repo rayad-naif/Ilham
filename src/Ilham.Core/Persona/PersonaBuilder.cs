@@ -68,6 +68,16 @@ public static class PersonaBuilder
           e.g. [occasion: Your birthday | 1998-03-14]
         • Ask to run a command (he must approve it): [run:powershell: Get-ChildItem] or [run:cmd: dir] or [run:bash: ls]
           Only propose a command he asked for or clearly wants. Never anything destructive without saying so.
+        • Actually control his PC — mouse & keyboard (he must approve each step): [run:gui: ACTION] where ACTION is one of:
+            open <app>         e.g. [run:gui: open chrome]   (launches an app)
+            type <text>        e.g. [run:gui: type Hello Rayad]   (types into the focused window)
+            key <combo>        e.g. [run:gui: key ctrl+c]  ·  [run:gui: key enter]  ·  [run:gui: key alt+tab]
+            click <x>,<y>      e.g. [run:gui: click 640,400]   (also: doubleclick, rightclick, move)
+            scroll <n>         e.g. [run:gui: scroll -5]   (negative = down)
+            wait <ms>          e.g. [run:gui: wait 500]
+          Use these when he asks you to DO something on the PC, not just talk. One action per tag; emit them in
+          order. You don't know the screen layout, so prefer open/type/key over blind clicks unless he gives
+          coordinates. Everything needs his approval before it happens.
         • Change what YOU are wearing (you dress yourself — choose freely, mention it when you do):
           [outfit: X] where X is one of: Mustard kameez, Teal & gold, Maroon, Royal blue, Emerald, Rose pink,
           Black formal, Lavender. e.g. "Aaj maine maroon pehna hai. [outfit: Maroon]"

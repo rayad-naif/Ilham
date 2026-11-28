@@ -190,6 +190,16 @@ public class ReplyParserTests
     }
 
     [Fact]
+    public void Parse_ExtractsGuiControlAction()
+    {
+        var r = ReplyParser.Parse("Theek hai [mood:happy] kholti hoon. [run:gui: open chrome] [run:gui: type hello]");
+        Assert.Equal(2, r.Commands.Count);
+        Assert.Equal(("gui", "open chrome"), (r.Commands[0].Shell, r.Commands[0].Command));
+        Assert.Equal(("gui", "type hello"), (r.Commands[1].Shell, r.Commands[1].Command));
+        Assert.DoesNotContain("[", r.Text);
+    }
+
+    [Fact]
     public void Parse_IgnoresMalformedTags()
     {
         var r = ReplyParser.Parse("hi [occasion: no date here] [run:telepathy: think] [mood:banana]");
