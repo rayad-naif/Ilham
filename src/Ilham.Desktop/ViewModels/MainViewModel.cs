@@ -57,7 +57,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _svc = new IlhamServices(dataDir, _http);
         Profile = _svc.Profiles.Load();
-        _voice = Services.Voice.Create(() => Profile.TtsUrl); // natural cloud voice when a /tts URL is set
+        _voice = Services.Voice.Create(() => Profile.TtsUrl, () => Profile.Language); // cloud voice + Whisper STT when a URL is set
         _console = new Ilham.Core.Console.ConsoleProcessor(_svc.Memory, _svc.Profiles, _svc.Vault,
             model => Task.Run(() => _svc.Llm.CheckAsync()).GetAwaiter().GetResult(),
             () => _voice is Services.CloudEdgeVoice cv

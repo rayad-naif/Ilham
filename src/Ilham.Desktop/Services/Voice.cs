@@ -34,9 +34,10 @@ public static class Voice
     /// Windows → a natural neural voice when a <c>/tts</c> URL is configured (falling back to the built-in
     /// Windows voice otherwise); other OSes → silent (so it still runs).
     /// </summary>
-    /// <param name="ttsUrl">Reads the current cloud TTS endpoint (empty = use the built-in voice).</param>
-    public static IVoice Create(Func<string>? ttsUrl = null) =>
-        OperatingSystem.IsWindows() ? new CloudEdgeVoice(ttsUrl ?? (() => "")) : new NullVoice();
+    /// <param name="ttsUrl">Reads the current cloud TTS/STT endpoint (empty = use the built-in voice).</param>
+    /// <param name="language">Reads the current language ("mix"/"urdu"/"english") for voice + transcription.</param>
+    public static IVoice Create(Func<string>? ttsUrl = null, Func<string>? language = null) =>
+        OperatingSystem.IsWindows() ? new CloudEdgeVoice(ttsUrl ?? (() => ""), language ?? (() => "mix")) : new NullVoice();
 }
 
 /// <summary>No-op voice for non-Windows dev/CI — everything else keeps working, she just doesn't talk.</summary>
@@ -157,7 +158,7 @@ public sealed class WindowsVoice : IVoice
 /// lip-sync driven by the actual waveform. If no endpoint is set, or the request fails (offline), she falls
 /// back to the built-in Windows voice so she's never mute. Listening (STT) always uses the Windows engine.
 /// </summary>
-public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
+public sealed class CloudEdgeVoice(Func<string> ttsUrl, Func<string> language) : IVoice
 {
     private readonly WindowsVoice _fallback = new();
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
@@ -255,7 +256,79 @@ public sealed class CloudEdgeVoice(Func<string> ttsUrl) : IVoice
     }
 
     /// <inheritdoc />
-    public Task<string?> ListenOnceAsync(CancellationToken ct) => _fallback.ListenOnceAsync(ct);
+    public async Task<string?> ListenOnceAsync(CancellationToken ct)
+    {
+        string url = ttsUrl().Trim();
+        if (url.Length == 0 || !OperatingSystem.IsWindows()) return await _fallback.ListenOnceAsync(ct);
+        try
+        {
+            byte[] wav = await RecordAsync(ct);
+            if (wav.Length < 4096) return null; // nothing said
+            return await TranscribeAsync(url, wav, ct);
+        }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception ex)
+        {
+            // Cloud STT unreachable — fall back to the Windows recognizer so the mic still does something.
+            LastError = ex.Message;
+            return await _fallback.ListenOnceAsync(ct);
+        }
+    }
+
+    // Records one utterance from the default mic (16 kHz mono) and stops on ~1.2 s of silence after speech.
+    private static Task<byte[]> RecordAsync(CancellationToken ct)
+    {
+        var tcs = new TaskCompletionSource<byte[]>();
+        if (!OperatingSystem.IsWindows()) { tcs.SetResult([]); return tcs.Task; }
+        var fmt = new NAudio.Wave.WaveFormat(16000, 16, 1);
+        var ms = new MemoryStream();
+        var writer = new NAudio.Wave.WaveFileWriter(ms, fmt);
+        var mic = new NAudio.Wave.WaveInEvent { WaveFormat = fmt, BufferMilliseconds = 100 };
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        double lastVoice = 0; bool spoke = false;
+
+        mic.DataAvailable += (_, e) =>
+        {
+            try { writer.Write(e.Buffer, 0, e.BytesRecorded); } catch { }
+            double sum = 0; int n = e.BytesRecorded / 2;
+            for (int i = 0; i + 1 < e.BytesRecorded; i += 2)
+            {
+                short v = (short)(e.Buffer[i] | (e.Buffer[i + 1] << 8));
+                double f = v / 32768.0; sum += f * f;
+            }
+            double rms = n > 0 ? Math.Sqrt(sum / n) : 0;
+            double t = sw.Elapsed.TotalSeconds;
+            if (rms > 0.02) { spoke = true; lastVoice = t; }
+            if ((spoke && t - lastVoice > 1.2) || t > 15) { try { mic.StopRecording(); } catch { } }
+        };
+        mic.RecordingStopped += (_, _) =>
+        {
+            byte[] bytes;
+            try { writer.Flush(); bytes = ms.ToArray(); } catch { bytes = []; }
+            try { writer.Dispose(); } catch { }
+            try { mic.Dispose(); } catch { }
+            tcs.TrySetResult(spoke ? bytes : []);
+        };
+        ct.Register(() => { try { mic.StopRecording(); } catch { } });
+        try { mic.StartRecording(); } catch (Exception ex) { tcs.TrySetException(ex); }
+        return tcs.Task;
+    }
+
+    // Sends the recorded WAV to the cloud Whisper endpoint and returns the transcript.
+    private async Task<string?> TranscribeAsync(string url, byte[] wav, CancellationToken ct)
+    {
+        string lang = language().ToLowerInvariant() switch { "urdu" => "ur", "english" => "en", _ => "" };
+        string q = lang.Length > 0 ? $"?lang={lang}" : "";
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{url.TrimEnd('/')}/stt{q}")
+        {
+            Content = new ByteArrayContent(wav),
+        };
+        req.Content.Headers.ContentType = new("audio/wav");
+        using var res = await _http.SendAsync(req, ct);
+        res.EnsureSuccessStatusCode();
+        using var doc = System.Text.Json.JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.TryGetProperty("text", out var t) ? t.GetString()?.Trim() : null;
+    }
 
     private async Task<byte[]> FetchAsync(string url, string text, string voice, string rate, string pitch, CancellationToken ct)
     {
